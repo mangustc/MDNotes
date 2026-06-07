@@ -1,0 +1,49 @@
+package com.mangustc.mdnotes.domain.usecases.notes
+
+import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.Project
+import com.mangustc.mdnotes.domain.models.RelativePath
+import com.mangustc.mdnotes.domain.repositories.ProjectRepository
+import com.mangustc.mdnotes.domain.usecases.UseCase
+import kotlin.time.Clock
+
+data class CreateNoteInput(
+    val project: Project,
+    val name: String,
+    val tags: List<String> = emptyList(),
+    val initialText: String = "",
+    val includeText: Boolean = false,
+    val includeFrontMatter: Boolean = false,
+)
+
+class CreateNoteUseCase(
+    private val projectRepository: ProjectRepository,
+    private val getNoteUseCase: GetNoteUseCase,
+) : UseCase<CreateNoteInput, Note> {
+    override suspend fun invoke(input: CreateNoteInput): Note {
+        val isoDate = Clock.System.now().toString()
+        var frontMatterBuilder = "---\ncreatedAt: $isoDate"
+        frontMatterBuilder += "\ntags:"
+        if (input.tags.isNotEmpty()) {
+            input.tags.forEach { tag -> frontMatterBuilder += "\n- $tag" }
+        }
+        val initialContent = "$frontMatterBuilder\n---\n${input.initialText}"
+
+        val newProjectFile = projectRepository.writeFile(
+            project = input.project,
+            relativePath = input.project.notesRelativePath.appendRelativePath(RelativePath("${input.name}.md")),
+            byteArray = initialContent.toByteArray(),
+            fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
+        )
+        val note = getNoteUseCase(
+            GetNoteInput(
+                project = input.project,
+                relativePath = newProjectFile.relativePath,
+                includeText = input.includeText,
+                includeFrontMatter = input.includeFrontMatter,
+            ),
+        )
+
+        return note
+    }
+}

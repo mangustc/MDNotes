@@ -1,0 +1,45 @@
+package com.mangustc.mdnotes.data.database
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Fts4
+import androidx.room.FtsOptions
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+@Entity(
+    tableName = "notes",
+    indices = [
+        Index(value = ["uri"], unique = true),
+        Index(value = ["projectId"]),
+    ],
+    foreignKeys = [
+        ForeignKey(
+            entity = ProjectEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["projectId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+)
+data class NoteEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val projectId: Long,
+    val uri: String,
+    val name: String,
+    val lastModified: Long,
+    val createdAt: Long? = null,
+    val tags: String,
+    val body: String,
+)
+
+@Fts4(
+    contentEntity = NoteEntity::class,
+    tokenizer = FtsOptions.TOKENIZER_UNICODE61,
+)
+@Entity(tableName = "notesFts")
+data class NoteEntityFts(
+    val id: Long,
+    val name: String,
+    val body: String,
+)

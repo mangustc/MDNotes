@@ -1,0 +1,132 @@
+package com.mangustc.mdnotes.domain.usecases.messenger
+
+import com.mangustc.mdnotes.domain.models.Attachment
+import com.mangustc.mdnotes.domain.models.FrontMatter
+import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.Project
+import com.mangustc.mdnotes.domain.repositories.ProjectRepository
+import com.mangustc.mdnotes.domain.usecases.UseCase
+import com.mangustc.mdnotes.domain.usecases.notes.CreateNoteInput
+import com.mangustc.mdnotes.domain.usecases.notes.CreateNoteUseCase
+import com.mangustc.mdnotes.domain.usecases.notes.SaveNoteTextInput
+import com.mangustc.mdnotes.domain.usecases.notes.SaveNoteTextUseCase
+import com.mangustc.mdnotes.domain.usecases.project.CopyToAssetsInput
+import com.mangustc.mdnotes.domain.usecases.project.CopyToAssetsUseCase
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.format.Padding
+import kotlinx.datetime.format.char
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+
+data class SendNoteInput(
+    val project: Project,
+    val body: String,
+    val attachments: List<Attachment>,
+    val editNote: Note? = null,
+)
+
+class SendNoteUseCase(
+    private val projectRepository: ProjectRepository,
+    private val createNoteUseCase: CreateNoteUseCase,
+    private val copyToAssetsUseCase: CopyToAssetsUseCase,
+    private val saveNoteTextUseCase: SaveNoteTextUseCase,
+) : UseCase<SendNoteInput, Unit> {
+    override suspend fun invoke(input: SendNoteInput) {
+        val isEditedNote = input.editNote != null
+        val targetNote = if (isEditedNote) {
+            input.editNote
+        } else {
+            val localDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val customFormat = LocalDateTime.Format {
+                year()
+                monthNumber(Padding.ZERO)
+                day(padding = Padding.ZERO)
+                char('_')
+                hour(Padding.ZERO)
+                minute(Padding.ZERO)
+                second(Padding.ZERO)
+            }
+            val timestamp = customFormat.format(localDateTime)
+            val name = "fleeting-$timestamp"
+            val tags = listOf(FrontMatter.QUICK_NOTE_TAG)
+            createNoteUseCase(
+                CreateNoteInput(
+                    project = input.project,
+                    name = name,
+                    tags = tags,
+                ),
+            )
+        }
+
+        val baseText = projectRepository.readFile(
+            project = input.project,
+            relativePath = targetNote.projectFile.relativePath,
+        ).decodeToString()
+
+        val parentContent = if (isEditedNote) {
+            val frontMatterEnd = run {
+                if (!baseText.trimStart().startsWith("---")) return@run 0
+                val lines = baseText.lines()
+                val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
+                if (closeIdx < 0) 0
+                else lines.take(closeIdx + 2).joinToString("\n").length
+            }
+            baseText.substring(0, frontMatterEnd).trimEnd()
+        } else {
+            baseText
+        }
+
+        val attachmentLines = buildString {
+            input.attachments.forEach { attachment ->
+                val label = attachment.displayName
+                    .replace("[", "\\[")
+                    .replace("]", "\\]")
+                val firstPart = when (attachment.type) {
+                    Attachment.AttachmentType.IMAGE -> "![$label]"
+                    Attachment.AttachmentType.FILE -> "[$label]"
+                }
+                when (attachment) {
+                    is Attachment.PendingAttachment -> {
+                        val projectFile =
+                            copyToAssetsUseCase(
+                                CopyToAssetsInput(
+                                    project = input.project,
+                                    assetPath = attachment.fileSystemPath,
+                                ),
+                            )
+                        append("\n$firstPart(<${projectFile.relativePath.value}>)")
+                    }
+
+                    is Attachment.ProjectAttachment -> {
+                        if (isEditedNote) append("\n$firstPart(<${attachment.relativePath.value}>)")
+                    }
+
+                    is Attachment.InvalidProjectAttachment -> {}
+                }
+            }
+        }
+
+        val finalContent = when {
+            input.body.isNotEmpty() && attachmentLines.isNotEmpty() ->
+                "$parentContent\n\n${input.body}$attachmentLines"
+
+            input.body.isNotEmpty() ->
+                "$parentContent\n\n${input.body}"
+
+            attachmentLines.isNotEmpty() ->
+                "$parentContent\n$attachmentLines"
+
+            else -> parentContent
+        }
+
+
+        saveNoteTextUseCase(
+            SaveNoteTextInput(
+                project = input.project,
+                note = targetNote,
+                text = finalContent,
+            ),
+        )
+    }
+}
