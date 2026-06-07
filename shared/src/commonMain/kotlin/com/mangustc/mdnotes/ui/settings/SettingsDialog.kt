@@ -40,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
 import mdnotes.shared.generated.resources.Res
@@ -56,6 +55,7 @@ import mdnotes.shared.generated.resources.settings
 import mdnotes.shared.generated.resources.synchronization
 import mdnotes.shared.generated.resources.yandex_disk
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -69,13 +69,11 @@ fun SettingsDialog(
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
     val currentProviderString = getStringFromValidSyncProvider(settings.syncProvider)
+    val settingsDialogProperties = koinInject<SettingsDialogProperties>()
 
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        properties = settingsDialogProperties.dialogProperties,
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
