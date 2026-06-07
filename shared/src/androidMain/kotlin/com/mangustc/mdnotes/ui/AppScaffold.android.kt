@@ -144,8 +144,8 @@ actual fun AppScaffold(
                     navController.navigate(EditorDestination(it.note.projectFile.relativePath.value))
 
                 is NavigationEvent.GoBack -> navController.popBackStack()
-                is NavigationEvent.OpenDrawer -> scope.launch { drawerState.open() }
-                is NavigationEvent.CloseDrawer -> scope.launch { drawerState.close() }
+                is NavigationEvent.OpenDrawer -> drawerState.open()
+                is NavigationEvent.CloseDrawer -> drawerState.close()
                 is NavigationEvent.OpenUrl -> uriHandler.openUri(it.url)
                 is NavigationEvent.OpenFile -> {
                     val intent = Intent(Intent.ACTION_VIEW).apply {
