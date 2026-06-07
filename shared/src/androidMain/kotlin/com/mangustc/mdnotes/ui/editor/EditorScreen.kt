@@ -122,7 +122,18 @@ import com.mangustc.mdnotes.ui.components.TooltipIconButton
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
 import mdnotes.shared.generated.resources.Res
-import mdnotes.shared.generated.resources.*
+import mdnotes.shared.generated.resources.add_property
+import mdnotes.shared.generated.resources.attach_file
+import mdnotes.shared.generated.resources.attach_photo
+import mdnotes.shared.generated.resources.bold
+import mdnotes.shared.generated.resources.edit_note
+import mdnotes.shared.generated.resources.editor_link_empty
+import mdnotes.shared.generated.resources.inline_code
+import mdnotes.shared.generated.resources.italic
+import mdnotes.shared.generated.resources.link_note
+import mdnotes.shared.generated.resources.open
+import mdnotes.shared.generated.resources.redo
+import mdnotes.shared.generated.resources.undo
 import org.jetbrains.compose.resources.stringResource
 
 

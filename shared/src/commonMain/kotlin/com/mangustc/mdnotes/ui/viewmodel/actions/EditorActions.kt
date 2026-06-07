@@ -5,7 +5,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.mangustc.mdnotes.domain.models.FrontMatter
-import com.mangustc.mdnotes.domain.models.MutableTextState
 import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SpanInfo

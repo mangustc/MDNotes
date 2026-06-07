@@ -75,7 +75,20 @@ import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.usecases.search.SearchEvent
 import com.mangustc.mdnotes.ui.util.scrollbar
 import mdnotes.shared.generated.resources.Res
-import mdnotes.shared.generated.resources.*
+import mdnotes.shared.generated.resources.actions
+import mdnotes.shared.generated.resources.cannot_be_undone
+import mdnotes.shared.generated.resources.clear_search
+import mdnotes.shared.generated.resources.delete
+import mdnotes.shared.generated.resources.more
+import mdnotes.shared.generated.resources.no_matches
+import mdnotes.shared.generated.resources.note_actions
+import mdnotes.shared.generated.resources.open
+import mdnotes.shared.generated.resources.pin
+import mdnotes.shared.generated.resources.rename
+import mdnotes.shared.generated.resources.reverse
+import mdnotes.shared.generated.resources.search_notes
+import mdnotes.shared.generated.resources.show_details
+import mdnotes.shared.generated.resources.unpin
 import org.jetbrains.compose.resources.stringResource
 
 

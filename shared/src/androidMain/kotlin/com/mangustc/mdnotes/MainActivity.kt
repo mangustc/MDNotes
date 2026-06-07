@@ -9,7 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.documentfile.provider.DocumentFile
-import androidx.lifecycle.ViewModelProvider
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.FileSystemPath
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel

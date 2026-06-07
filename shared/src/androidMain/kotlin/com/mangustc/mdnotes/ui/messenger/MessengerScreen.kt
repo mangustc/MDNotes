@@ -154,10 +154,36 @@ import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
 import io.ktor.http.Url
 import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
 import mdnotes.shared.generated.resources.Res
-import mdnotes.shared.generated.resources.*
+import mdnotes.shared.generated.resources.actions
+import mdnotes.shared.generated.resources.attach_content
+import mdnotes.shared.generated.resources.attach_files
+import mdnotes.shared.generated.resources.attach_images
+import mdnotes.shared.generated.resources.attachment
+import mdnotes.shared.generated.resources.cancel_editing
+import mdnotes.shared.generated.resources.cannot_be_undone
+import mdnotes.shared.generated.resources.copy
+import mdnotes.shared.generated.resources.create_note
+import mdnotes.shared.generated.resources.delete
+import mdnotes.shared.generated.resources.edit
+import mdnotes.shared.generated.resources.edit_note
+import mdnotes.shared.generated.resources.edited_date
+import mdnotes.shared.generated.resources.editing_note
+import mdnotes.shared.generated.resources.file
+import mdnotes.shared.generated.resources.go_back
+import mdnotes.shared.generated.resources.image
+import mdnotes.shared.generated.resources.new_quick_note
+import mdnotes.shared.generated.resources.no_quick_notes_yet_type_something_below_to_get_started
+import mdnotes.shared.generated.resources.open
+import mdnotes.shared.generated.resources.open_a_project_folder_to_see_notes
+import mdnotes.shared.generated.resources.pin
+import mdnotes.shared.generated.resources.pinned_message
+import mdnotes.shared.generated.resources.remove_attachment
+import mdnotes.shared.generated.resources.save_changes
+import mdnotes.shared.generated.resources.take_photo
+import mdnotes.shared.generated.resources.unpin
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -170,7 +196,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val attachments = remember { mutableStateListOf<Attachment>() }
     var imagePagerState by remember { mutableStateOf<Pair<Int, List<FileSystemPath>>?>(null) }
     var carouselExpanded by rememberSaveable { mutableStateOf(false) }
-    val resources = LocalResources.current
+    LocalResources.current
     val context = LocalContext.current
 
     val defaultImageString = stringResource(Res.string.image)
@@ -556,7 +582,7 @@ private fun MessengerInputBar(
     onCarouselExpandClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val resources = LocalResources.current
+    LocalResources.current
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
@@ -698,7 +724,7 @@ private fun AttachmentCarouselStrip(
     isViewing: Boolean,
 ) {
     val state = rememberCarouselState { if (isViewing) attachments.size else attachments.size + 3 }
-    val resources = LocalResources.current
+    LocalResources.current
     HorizontalUncontainedCarousel(
         state = state,
         itemWidth = 80.dp,
@@ -882,7 +908,7 @@ private fun MessageBubble(
     val clipboard = LocalClipboard.current
     val uriHandler = LocalUriHandler.current
     val focusManager = LocalFocusManager.current
-    val resources = LocalResources.current
+    LocalResources.current
 
     val urls =
         remember(message.note.body) { message.links.map { it.value }.toList() }
@@ -1239,7 +1265,7 @@ private fun FullScreenImageCarouselDialog(
 ) {
     val state = rememberCarouselState(initialItem = initialIndex) { uris.size }
     var showTopPanel by remember { mutableStateOf(true) }
-    val resources = LocalResources.current
+    LocalResources.current
 
     Dialog(
         onDismissRequest = onDismiss,

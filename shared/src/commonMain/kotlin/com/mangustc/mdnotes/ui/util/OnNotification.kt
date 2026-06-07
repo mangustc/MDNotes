@@ -15,7 +15,22 @@ import com.mangustc.mdnotes.domain.exceptions.SyncServerException
 import com.mangustc.mdnotes.domain.exceptions.SyncStateException
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
 import mdnotes.shared.generated.resources.Res
-import mdnotes.shared.generated.resources.*
+import mdnotes.shared.generated.resources.authentication_failed_please_log_in_again
+import mdnotes.shared.generated.resources.cloud_storage_full_free_up_space
+import mdnotes.shared.generated.resources.copy
+import mdnotes.shared.generated.resources.failed_to_access_project_directory
+import mdnotes.shared.generated.resources.failed_to_create_photo_container
+import mdnotes.shared.generated.resources.failed_to_fetch_link_information
+import mdnotes.shared.generated.resources.failed_to_start_camera
+import mdnotes.shared.generated.resources.file_not_found
+import mdnotes.shared.generated.resources.file_not_readable
+import mdnotes.shared.generated.resources.file_not_writable
+import mdnotes.shared.generated.resources.network_error_check_internet_connection
+import mdnotes.shared.generated.resources.no_app_found_to_open_this_file
+import mdnotes.shared.generated.resources.no_sync_service_configured_configure_one_in_settings
+import mdnotes.shared.generated.resources.sync_data_corrupted_please_reset_sync
+import mdnotes.shared.generated.resources.sync_server_unavailable_try_again_later
+import mdnotes.shared.generated.resources.unknown_error
 import org.jetbrains.compose.resources.getString
 
 suspend fun onNotificationToast(event: NotificationEvent, toast: (String) -> Unit) {

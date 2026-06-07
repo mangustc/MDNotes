@@ -57,7 +57,8 @@ private fun provideHttpClient(): HttpClient = HttpClient(Android) {
     }
 }
 
-private fun provideFactory(context: Context): Settings.Factory = SharedPreferencesSettings.Factory(context)
+private fun provideFactory(context: Context): Settings.Factory =
+    SharedPreferencesSettings.Factory(context)
 
 private fun providePlatformPathHandler(context: Context): PlatformPathHandler =
     AndroidPlatformPathHandler(context)

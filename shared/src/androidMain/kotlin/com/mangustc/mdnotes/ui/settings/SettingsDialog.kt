@@ -1,6 +1,5 @@
 package com.mangustc.mdnotes.ui.settings
 
-import android.content.res.Resources
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,8 +44,17 @@ import androidx.compose.ui.window.DialogProperties
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
 import mdnotes.shared.generated.resources.Res
-import mdnotes.shared.generated.resources.*
-import org.jetbrains.compose.resources.getString
+import mdnotes.shared.generated.resources.close
+import mdnotes.shared.generated.resources.general
+import mdnotes.shared.generated.resources.get_oauth_token
+import mdnotes.shared.generated.resources.none_sync
+import mdnotes.shared.generated.resources.oauth_token
+import mdnotes.shared.generated.resources.open_link
+import mdnotes.shared.generated.resources.provider
+import mdnotes.shared.generated.resources.reverse_drawer_layout
+import mdnotes.shared.generated.resources.settings
+import mdnotes.shared.generated.resources.synchronization
+import mdnotes.shared.generated.resources.yandex_disk
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
