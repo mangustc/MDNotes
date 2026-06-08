@@ -41,31 +41,31 @@ fun ShowInfoDialog(
         text = {
             Column {
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Companion.Transparent),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text(stringResource(Res.string.name)) },
                     supportingContent = { Text(note.name) },
                     leadingContent = { Icon(Icons.Default.Abc, contentDescription = null) },
                 )
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Companion.Transparent),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text(stringResource(Res.string.last_modified)) },
                     supportingContent = {
                         val timeString = dateFormatter.formatRelativeTime(
                             note.lastModified,
-                            DateFormatter.Companion.HOUR_MILLIS,
+                            DateFormatter.HOUR_MILLIS,
                         )
                         Text(timeString.ifBlank { stringResource(Res.string.n_a) })
                     },
                     leadingContent = { Icon(Icons.Default.History, contentDescription = null) },
                 )
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Companion.Transparent),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text(stringResource(Res.string.created_at)) },
                     supportingContent = {
                         val timeString =
                             if (note.createdAt != null) dateFormatter.formatRelativeTime(
                                 note.createdAt,
-                                DateFormatter.Companion.HOUR_MILLIS,
+                                DateFormatter.HOUR_MILLIS,
                             ) else null
                         Text(if (!timeString.isNullOrBlank()) timeString else stringResource(Res.string.n_a))
                     },
@@ -77,7 +77,7 @@ fun ShowInfoDialog(
                     },
                 )
                 ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Companion.Transparent),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     headlineContent = { Text(stringResource(Res.string.tags)) },
                     supportingContent = {
                         Text(

@@ -35,15 +35,15 @@ fun CreateNoteDialog(
         text = {
             Column {
                 Text(stringResource(Res.string.enter_a_name_for_your_new_note))
-                Spacer(Modifier.Companion.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = initialName,
                     onValueChange = { onNameChange(it) },
                     keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Companion.Sentences,
+                        capitalization = KeyboardCapitalization.Sentences,
                     ),
                     label = { Text(stringResource(Res.string.note_name)) },
-                    modifier = Modifier.Companion.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },

@@ -35,9 +35,9 @@ fun DeleteNoteDialog(
                 Text(stringResource(Res.string.are_you_sure_you_want_to_delete_this_note))
                 Text(
                     text = noteName,
-                    fontWeight = FontWeight.Companion.Bold,
+                    fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.Companion.height(4.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     text = stringResource(Res.string.this_action_cannot_be_undone),
                     color = MaterialTheme.colorScheme.error,

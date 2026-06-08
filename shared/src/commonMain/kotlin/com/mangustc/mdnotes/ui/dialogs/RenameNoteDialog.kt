@@ -35,15 +35,15 @@ fun RenameNoteDialog(
         text = {
             Column {
                 Text(stringResource(Res.string.enter_a_new_name_for_your_note))
-                Spacer(Modifier.Companion.height(8.dp))
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = name,
                     onValueChange = { onNameChange(it) },
                     label = { Text(stringResource(Res.string.note_name)) },
                     keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Companion.Sentences,
+                        capitalization = KeyboardCapitalization.Sentences,
                     ),
-                    modifier = Modifier.Companion.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         },
