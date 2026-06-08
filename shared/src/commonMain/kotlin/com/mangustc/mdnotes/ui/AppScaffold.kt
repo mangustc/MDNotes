@@ -10,28 +10,21 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Abc
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
@@ -41,15 +34,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -70,12 +59,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,16 +74,18 @@ import androidx.navigation.toRoute
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
-import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.ui.components.NoteDrawerItem
 import com.mangustc.mdnotes.ui.components.NoteSearchBar
 import com.mangustc.mdnotes.ui.components.TooltipIconButton
+import com.mangustc.mdnotes.ui.dialogs.CreateNoteDialog
+import com.mangustc.mdnotes.ui.dialogs.DeleteNoteDialog
+import com.mangustc.mdnotes.ui.dialogs.RenameNoteDialog
+import com.mangustc.mdnotes.ui.dialogs.ShowInfoDialog
 import com.mangustc.mdnotes.ui.editor.EditorScreen
 import com.mangustc.mdnotes.ui.messenger.MessengerScreen
 import com.mangustc.mdnotes.ui.navigation.EditorDestination
 import com.mangustc.mdnotes.ui.navigation.MessengerDestination
 import com.mangustc.mdnotes.ui.settings.SettingsDialog
-import com.mangustc.mdnotes.ui.util.DateFormatter
 import com.mangustc.mdnotes.ui.util.clipEntryOf
 import com.mangustc.mdnotes.ui.util.onNotificationToast
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
@@ -110,40 +98,19 @@ import io.github.vinceglb.filekit.dialogs.openFileWithDefaultApplication
 import kotlinx.coroutines.launch
 import mdnotes.shared.generated.resources.Res
 import mdnotes.shared.generated.resources.app_name
-import mdnotes.shared.generated.resources.are_you_sure_you_want_to_delete_this_note
-import mdnotes.shared.generated.resources.cancel
 import mdnotes.shared.generated.resources.clear_selection
-import mdnotes.shared.generated.resources.close
 import mdnotes.shared.generated.resources.copy_selected
-import mdnotes.shared.generated.resources.create
 import mdnotes.shared.generated.resources.create_new_note
-import mdnotes.shared.generated.resources.created_at
-import mdnotes.shared.generated.resources.delete
-import mdnotes.shared.generated.resources.delete_note
 import mdnotes.shared.generated.resources.delete_selected
-import mdnotes.shared.generated.resources.enter_a_name_for_your_new_note
-import mdnotes.shared.generated.resources.enter_a_new_name_for_your_note
 import mdnotes.shared.generated.resources.go_back
-import mdnotes.shared.generated.resources.last_modified
-import mdnotes.shared.generated.resources.n_a
-import mdnotes.shared.generated.resources.name
-import mdnotes.shared.generated.resources.new_note
-import mdnotes.shared.generated.resources.none
-import mdnotes.shared.generated.resources.note_details
-import mdnotes.shared.generated.resources.note_name
 import mdnotes.shared.generated.resources.open_a_project_folder_to_see_notes
 import mdnotes.shared.generated.resources.open_menu
 import mdnotes.shared.generated.resources.quick_notes
 import mdnotes.shared.generated.resources.read_editor
-import mdnotes.shared.generated.resources.rename
-import mdnotes.shared.generated.resources.rename_note
 import mdnotes.shared.generated.resources.select_project_folder
 import mdnotes.shared.generated.resources.settings
 import mdnotes.shared.generated.resources.synchronization
-import mdnotes.shared.generated.resources.tags
-import mdnotes.shared.generated.resources.this_action_cannot_be_undone
 import org.jetbrains.compose.resources.stringResource
-import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -563,175 +530,3 @@ fun AppScaffold(
     }
 }
 
-@Composable
-fun CreateNoteDialog(
-    onDismissRequest: () -> Unit,
-    onConfirmCreate: () -> Unit,
-    initialName: String,
-    onNameChange: (String) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(stringResource(Res.string.new_note)) },
-        text = {
-            Column {
-                Text(stringResource(Res.string.enter_a_name_for_your_new_note))
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = initialName,
-                    onValueChange = { onNameChange(it) },
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                    ),
-                    label = { Text(stringResource(Res.string.note_name)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { if (initialName.isNotBlank()) onConfirmCreate() },
-            ) { Text(stringResource(Res.string.create)) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismissRequest) { Text(stringResource(Res.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-fun RenameNoteDialog(
-    onDismissRequest: () -> Unit,
-    onConfirmRename: () -> Unit,
-    name: String,
-    onNameChange: (String) -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(stringResource(Res.string.rename_note)) },
-        text = {
-            Column {
-                Text(stringResource(Res.string.enter_a_new_name_for_your_note))
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { onNameChange(it) },
-                    label = { Text(stringResource(Res.string.note_name)) },
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirmRename) { Text(stringResource(Res.string.rename)) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismissRequest) { Text(stringResource(Res.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-fun DeleteNoteDialog(
-    onDismissRequest: () -> Unit,
-    onConfirmDelete: () -> Unit,
-    noteName: String,
-) {
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(stringResource(Res.string.delete_note)) },
-        text = {
-            Column {
-                Text(stringResource(Res.string.are_you_sure_you_want_to_delete_this_note))
-                Text(
-                    text = noteName,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = stringResource(Res.string.this_action_cannot_be_undone),
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirmDelete,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            ) { Text(stringResource(Res.string.delete)) }
-        },
-        dismissButton = {
-            OutlinedButton(onClick = onDismissRequest) { Text(stringResource(Res.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-fun ShowInfoDialog(
-    onDismissRequest: () -> Unit,
-    note: Note,
-) {
-    val dateFormatter = koinInject<DateFormatter>()
-
-    AlertDialog(
-        onDismissRequest = onDismissRequest,
-        title = { Text(stringResource(Res.string.note_details)) },
-        text = {
-            Column {
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    headlineContent = { Text(stringResource(Res.string.name)) },
-                    supportingContent = { Text(note.name) },
-                    leadingContent = { Icon(Icons.Default.Abc, contentDescription = null) },
-                )
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    headlineContent = { Text(stringResource(Res.string.last_modified)) },
-                    supportingContent = {
-                        val timeString = dateFormatter.formatRelativeTime(
-                            note.lastModified,
-                            DateFormatter.HOUR_MILLIS,
-                        )
-                        Text(timeString.ifBlank { stringResource(Res.string.n_a) })
-                    },
-                    leadingContent = { Icon(Icons.Default.History, contentDescription = null) },
-                )
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    headlineContent = { Text(stringResource(Res.string.created_at)) },
-                    supportingContent = {
-                        val timeString =
-                            if (note.createdAt != null) dateFormatter.formatRelativeTime(
-                                note.createdAt,
-                                DateFormatter.HOUR_MILLIS,
-                            ) else null
-                        Text(if (!timeString.isNullOrBlank()) timeString else stringResource(Res.string.n_a))
-                    },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.CalendarMonth,
-                            contentDescription = null,
-                        )
-                    },
-                )
-                ListItem(
-                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                    headlineContent = { Text(stringResource(Res.string.tags)) },
-                    supportingContent = {
-                        Text(
-                            if (!note.tags.isNullOrEmpty()) note.tags.joinToString(", ") else stringResource(
-                                Res.string.none,
-                            ),
-                        )
-                    },
-                    leadingContent = { Icon(Icons.Default.Tag, contentDescription = null) },
-                )
-            }
-        },
-        confirmButton = {
-            OutlinedButton(onClick = onDismissRequest) { Text(stringResource(Res.string.close)) }
-        },
-    )
-}
