@@ -1207,7 +1207,6 @@ private fun FullScreenImageCarouselDialog(
 ) {
     val state = rememberCarouselState(initialItem = initialIndex) { uris.size }
     var showTopPanel by remember { mutableStateOf(true) }
-    LocalResources.current
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1333,7 +1332,7 @@ private fun ZoomableImage(file: DomainFile, onTap: () -> Unit) {
             },
     ) {
         AsyncImage(
-            model = file,
+            model = file.file,
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier
