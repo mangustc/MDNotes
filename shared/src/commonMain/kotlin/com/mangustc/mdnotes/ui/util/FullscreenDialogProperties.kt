@@ -1,7 +1,7 @@
-package com.mangustc.mdnotes.ui.settings
+package com.mangustc.mdnotes.ui.util
 
 import androidx.compose.ui.window.DialogProperties
 
-interface SettingsDialogProperties {
+interface FullscreenDialogProperties {
     val dialogProperties: DialogProperties
 }

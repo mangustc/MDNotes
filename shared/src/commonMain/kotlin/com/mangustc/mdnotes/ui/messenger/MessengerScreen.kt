@@ -1,7 +1,5 @@
 package com.mangustc.mdnotes.ui.messenger
 
-import android.content.ClipData
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -85,6 +83,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -96,12 +95,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -117,15 +113,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
-import coil3.ImageLoader
 import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.AsyncImage
-import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.mangustc.mdnotes.domain.markdown.MarkdownParser
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.DomainFile
@@ -137,6 +130,9 @@ import com.mangustc.mdnotes.ui.components.MenuPopupGroup
 import com.mangustc.mdnotes.ui.components.MenuPopupItem
 import com.mangustc.mdnotes.ui.components.TooltipIconButton
 import com.mangustc.mdnotes.ui.util.DateFormatter
+import com.mangustc.mdnotes.ui.util.FullscreenDialogProperties
+import com.mangustc.mdnotes.ui.util.RememberCameraLauncher
+import com.mangustc.mdnotes.ui.util.clipEntryOf
 import com.mangustc.mdnotes.ui.util.scrollbar
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
@@ -144,13 +140,9 @@ import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
-import io.github.vinceglb.filekit.dialogs.compose.rememberCameraPickerLauncher
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.dialogs.openFileWithDefaultApplication
 import io.github.vinceglb.filekit.name
-import io.ktor.client.HttpClient
-import io.ktor.client.plugins.defaultRequest
-import io.ktor.client.request.header
 import io.ktor.http.Url
 import kotlinx.coroutines.launch
 import mdnotes.shared.generated.resources.Res
@@ -222,16 +214,15 @@ fun MessengerScreen(viewModel: AppViewModel) {
         }
     }
 
-    val cameraLauncher = rememberCameraPickerLauncher { file ->
-        if (file == null) return@rememberCameraPickerLauncher
+    val cameraLauncher = koinInject<RememberCameraLauncher>().rememberCameraLauncher { file ->
+        if (file == null) return@rememberCameraLauncher
         attachments.add(
             Attachment.PendingAttachment(
-                domainFile = DomainFile(file),
+                domainFile = file,
                 displayName = file.name,
                 type = Attachment.AttachmentType.IMAGE,
             ),
         )
-
     }
 
     LaunchedEffect(Unit) {
@@ -267,10 +258,6 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val density = LocalDensity.current
     var inputBarHeightDp by remember { mutableStateOf(0.dp) }
 
-    if (uiState.messengerSelectedNotes.isNotEmpty()) {
-        BackHandler { viewModel.messenger.clearSelection() }
-    }
-
     if (!uiState.messengerIsLoading && uiState.project == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -296,12 +283,8 @@ fun MessengerScreen(viewModel: AppViewModel) {
                     attachments.clear()
                     carouselExpanded = false
                 },
-                onTakePhoto = {
-                    try {
-                        cameraLauncher.launch()
-                    } catch (_: Exception) {
-                        viewModel.onEvent(NotificationEvent.FailedToStartCamera)
-                    }
+                onTakePhoto = if (cameraLauncher == null) null else { ->
+                    cameraLauncher.launch()
                 },
                 onAddImage = {
                     imagePickerLauncher.launch()
@@ -523,7 +506,7 @@ private fun MessengerInputBar(
     attachments: List<Attachment>,
     isEditing: Boolean,
     onCancelEdit: () -> Unit,
-    onTakePhoto: () -> Unit,
+    onTakePhoto: (() -> Unit)?,
     onAddImage: () -> Unit,
     onAddFile: () -> Unit,
     onImageClick: (DomainFile) -> Unit,
@@ -597,7 +580,6 @@ private fun MessengerInputBar(
                 onRemove = onRemoveAttachment,
                 onImageClick = onImageClick,
                 onFileClick = onFileClick,
-                isViewing = false,
             )
         }
         TextField(
@@ -666,16 +648,10 @@ private fun MessengerInputBar(
 private fun AttachmentCarouselStrip(
     modifier: Modifier = Modifier,
     attachments: List<Attachment>,
-    onTakePhoto: (() -> Unit)? = null,
-    onAddImage: (() -> Unit)? = null,
-    onAddFile: (() -> Unit)? = null,
-    onRemove: ((Int) -> Unit)? = null,
     onImageClick: (DomainFile) -> Unit,
     onFileClick: (DomainFile) -> Unit,
-    isViewing: Boolean,
 ) {
-    val state = rememberCarouselState { if (isViewing) attachments.size else attachments.size + 3 }
-    LocalResources.current
+    val state = rememberCarouselState { attachments.size }
     HorizontalUncontainedCarousel(
         state = state,
         itemWidth = 80.dp,
@@ -688,52 +664,101 @@ private fun AttachmentCarouselStrip(
                 .fillMaxWidth()
                 .aspectRatio(1f),
         ) {
-            if (!isViewing && page == 0) {
-                AttachmentIconButton(
-                    attachment = Attachment.PendingAttachment(
-                        domainFile = DomainFile(PlatformFile("")),
-                        type = Attachment.AttachmentType.FILE,
-                        displayName = stringResource(Res.string.take_photo),
-                    ),
-                    icon = Icons.Default.PhotoCamera,
-                    onClick = onTakePhoto ?: {},
-                )
-            } else if (!isViewing && page == 1) {
-                AttachmentIconButton(
-                    attachment = Attachment.PendingAttachment(
-                        domainFile = DomainFile(PlatformFile("")),
-                        type = Attachment.AttachmentType.FILE,
-                        displayName = stringResource(Res.string.attach_images),
-                    ),
-                    icon = Icons.Default.Image,
-                    onClick = onAddImage ?: {},
-                )
-            } else if (!isViewing && page == 2) {
-                AttachmentIconButton(
-                    attachment = Attachment.PendingAttachment(
-                        domainFile = DomainFile(PlatformFile("")),
-                        type = Attachment.AttachmentType.FILE,
-                        displayName = stringResource(Res.string.attach_files),
-                    ),
-                    icon = Icons.Default.AttachFile,
-                    onClick = onAddFile ?: {},
-                )
-            } else {
-                val attachment = attachments[if (isViewing) page else page - 3]
-                AttachmentIconButton(
-                    attachment = attachment,
-                    onClick = when (attachment.type) {
-                        Attachment.AttachmentType.IMAGE -> {
-                            { onImageClick(attachment.domainFile) }
-                        }
+            val attachment = attachments[page]
+            AttachmentIconButton(
+                attachment = attachment,
+                onClick = when (attachment.type) {
+                    Attachment.AttachmentType.IMAGE -> {
+                        { onImageClick(attachment.domainFile) }
+                    }
 
-                        Attachment.AttachmentType.FILE -> {
-                            { onFileClick(attachment.domainFile) }
-                        }
-                    },
-                )
+                    Attachment.AttachmentType.FILE -> {
+                        { onFileClick(attachment.domainFile) }
+                    }
+                },
+            )
+        }
+    }
+}
 
-                if (onRemove != null) {
+@Composable
+private fun AttachmentCarouselStrip(
+    modifier: Modifier = Modifier,
+    attachments: List<Attachment>,
+    onTakePhoto: (() -> Unit)?,
+    onAddImage: (() -> Unit),
+    onAddFile: (() -> Unit),
+    onRemove: ((Int) -> Unit),
+    onImageClick: (DomainFile) -> Unit,
+    onFileClick: (DomainFile) -> Unit,
+) {
+    val photoDiff = if (onTakePhoto == null) 1 else 0
+    val extraCount = 2 + if (onTakePhoto != null) 1 else 0
+    val state = rememberCarouselState { attachments.size + extraCount }
+    HorizontalUncontainedCarousel(
+        state = state,
+        itemWidth = 80.dp,
+        itemSpacing = 4.dp,
+        modifier = modifier
+            .wrapContentHeight(),
+    ) { page ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f),
+        ) {
+            when (page) {
+                0 - photoDiff -> {
+                    AttachmentIconButton(
+                        attachment = Attachment.PendingAttachment(
+                            domainFile = DomainFile(PlatformFile("")),
+                            type = Attachment.AttachmentType.FILE,
+                            displayName = stringResource(Res.string.take_photo),
+                        ),
+                        icon = Icons.Default.PhotoCamera,
+                        onClick = onTakePhoto ?: {},
+                    )
+                }
+
+                1 - photoDiff -> {
+                    AttachmentIconButton(
+                        attachment = Attachment.PendingAttachment(
+                            domainFile = DomainFile(PlatformFile("")),
+                            type = Attachment.AttachmentType.FILE,
+                            displayName = stringResource(Res.string.attach_images),
+                        ),
+                        icon = Icons.Default.Image,
+                        onClick = onAddImage,
+                    )
+                }
+
+                2 - photoDiff -> {
+                    AttachmentIconButton(
+                        attachment = Attachment.PendingAttachment(
+                            domainFile = DomainFile(PlatformFile("")),
+                            type = Attachment.AttachmentType.FILE,
+                            displayName = stringResource(Res.string.attach_files),
+                        ),
+                        icon = Icons.Default.AttachFile,
+                        onClick = onAddFile,
+                    )
+                }
+
+                else -> {
+                    val attachment = attachments[page - extraCount]
+                    AttachmentIconButton(
+                        attachment = attachment,
+                        onClick = when (attachment.type) {
+                            Attachment.AttachmentType.IMAGE -> {
+                                { onImageClick(attachment.domainFile) }
+                            }
+
+                            Attachment.AttachmentType.FILE -> {
+                                { onFileClick(attachment.domainFile) }
+                            }
+                        },
+                    )
+
                     Box(
                         contentAlignment = Alignment.TopEnd,
                         modifier = Modifier
@@ -834,7 +859,7 @@ private fun AttachmentIconButton(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun MessageBubble(
     message: MessageBody,
@@ -972,7 +997,6 @@ private fun MessageBubble(
                                         onNoAppFound()
                                     }
                                 },
-                                isViewing = true,
                             )
                             if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -1020,11 +1044,8 @@ private fun MessageBubble(
                                                         .firstOrNull()?.let { link ->
                                                             scope.launch {
                                                                 clipboard.setClipEntry(
-                                                                    ClipEntry(
-                                                                        ClipData.newPlainText(
-                                                                            "URL",
-                                                                            link.item,
-                                                                        ),
+                                                                    clipEntryOf(
+                                                                        link.item,
                                                                     ),
                                                                 )
                                                                 onLinkCopied()
@@ -1097,14 +1118,7 @@ private fun MessageBubble(
                         onClick = {
                             menuExpanded = false
                             scope.launch {
-                                clipboard.setClipEntry(
-                                    ClipEntry(
-                                        ClipData.newPlainText(
-                                            "Note text",
-                                            message.text,
-                                        ),
-                                    ),
-                                )
+                                clipboard.setClipEntry(clipEntryOf(message.text))
                             }
                         },
                     )
@@ -1207,13 +1221,11 @@ private fun FullScreenImageCarouselDialog(
 ) {
     val state = rememberCarouselState(initialItem = initialIndex) { uris.size }
     var showTopPanel by remember { mutableStateOf(true) }
+    val fullscreenDialogProperties = koinInject<FullscreenDialogProperties>()
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false,
-        ),
+        properties = fullscreenDialogProperties.dialogProperties,
     ) {
         Box(
             modifier = Modifier
@@ -1376,39 +1388,9 @@ private fun LinkPreviewCarousel(previews: List<LinkPreview>) {
             ) {
                 Column {
                     if (!preview.imageUrl.isNullOrBlank()) {
-                        val context = LocalContext.current
-                        val browserImageLoader = remember(preview.url) {
-                            ImageLoader.Builder(context)
-                                .components {
-                                    add(
-                                        KtorNetworkFetcherFactory(
-                                            httpClient = HttpClient {
-                                                defaultRequest {
-                                                    header(
-                                                        "User-Agent",
-                                                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                                                    )
-                                                    header(
-                                                        "Accept",
-                                                        "image/webp,image/apng,image/*,*/*;q=0.8",
-                                                    )
-                                                    header(
-                                                        "Accept-Language",
-                                                        "en-US,en;q=0.9",
-                                                    )
-                                                    header("Referer", preview.url)
-                                                }
-                                            },
-                                        ),
-                                    )
-                                }
-                                .build()
-                        }
-
                         AsyncImage(
                             model = preview.imageUrl,
                             contentDescription = preview.title,
-                            imageLoader = browserImageLoader,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(16f / 9f)

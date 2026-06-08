@@ -1,8 +1,9 @@
 package com.mangustc.mdnotes.ui.settings
 
 import androidx.compose.ui.window.DialogProperties
+import com.mangustc.mdnotes.ui.util.FullscreenDialogProperties
 
-class AndroidSettingsDialogProperties : SettingsDialogProperties {
+class AndroidFullscreenDialogProperties : FullscreenDialogProperties {
     override val dialogProperties: DialogProperties
         get() = DialogProperties(
             usePlatformDefaultWidth = false,

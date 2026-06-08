@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
+import com.mangustc.mdnotes.ui.util.FullscreenDialogProperties
 import mdnotes.shared.generated.resources.Res
 import mdnotes.shared.generated.resources.close
 import mdnotes.shared.generated.resources.general
@@ -69,11 +70,11 @@ fun SettingsDialog(
 ) {
     var dropdownExpanded by remember { mutableStateOf(false) }
     val currentProviderString = getStringFromValidSyncProvider(settings.syncProvider)
-    val settingsDialogProperties = koinInject<SettingsDialogProperties>()
+    val fullscreenDialogProperties = koinInject<FullscreenDialogProperties>()
 
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = settingsDialogProperties.dialogProperties,
+        properties = fullscreenDialogProperties.dialogProperties,
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
