@@ -1,6 +1,6 @@
 package com.mangustc.mdnotes.domain.models
 
 data class ProjectFile(
-    val fileSystemPath: FileSystemPath,
+    val domainFile: DomainFile,
     val relativePath: RelativePath,
 )

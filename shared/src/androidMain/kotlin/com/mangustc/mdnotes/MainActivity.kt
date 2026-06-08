@@ -2,7 +2,6 @@ package com.mangustc.mdnotes
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -10,9 +9,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.documentfile.provider.DocumentFile
 import com.mangustc.mdnotes.domain.models.Attachment
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.init
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -47,23 +47,14 @@ class MainActivity : ComponentActivity() {
 
         val uris: List<Uri> = when (action) {
             Intent.ACTION_SEND -> {
-                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val uri =
                     intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(Intent.EXTRA_STREAM)
-                }
                 listOfNotNull(uri)
             }
 
             Intent.ACTION_SEND_MULTIPLE -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
-                        ?: emptyList()
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM) ?: emptyList()
-                }
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                    ?: emptyList()
             }
 
             else -> emptyList()
@@ -73,7 +64,7 @@ class MainActivity : ComponentActivity() {
             val resolvedMime = contentResolver.getType(uri) ?: mimeType
             val displayName = DocumentFile.fromSingleUri(this, uri)?.name ?: "File"
             Attachment.PendingAttachment(
-                fileSystemPath = FileSystemPath(uri.toString()),
+                domainFile = DomainFile(PlatformFile(uri)),
                 displayName = displayName,
                 type = if (resolvedMime.startsWith("image/")) Attachment.AttachmentType.IMAGE else Attachment.AttachmentType.FILE,
             )

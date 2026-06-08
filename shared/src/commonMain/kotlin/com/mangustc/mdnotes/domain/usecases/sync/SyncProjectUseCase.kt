@@ -52,7 +52,7 @@ class SyncProjectUseCase(
         }.getOrNull() ?: SyncManifest.Empty
 
         val remoteManifest =
-            syncRepository.downloadFile(remoteRoot.appendRelativePath(SyncManifest.ProjectRelativePath))
+            syncRepository.downloadFile(remoteRoot.resolve(SyncManifest.ProjectRelativePath))
                 ?.let {
                     runCatching {
                         json.decodeFromString<SyncManifest>(it.decodeToString())
@@ -76,7 +76,7 @@ class SyncProjectUseCase(
         }
 
         actions.forEach { action ->
-            val remotePath = remoteRoot.appendRelativePath(action.relativePath)
+            val remotePath = remoteRoot.resolve(action.relativePath)
             when (action) {
                 is SyncFileAction.Upload, is SyncFileAction.ConflictUpload -> {
                     val bytes = projectRepository.readFile(project, action.relativePath)
@@ -113,7 +113,7 @@ class SyncProjectUseCase(
 
         val newManifestBytes = json.encodeToString(manifest).toByteArray()
         syncRepository.uploadFile(
-            remoteRoot.appendRelativePath(SyncManifest.ProjectRelativePath),
+            remoteRoot.resolve(SyncManifest.ProjectRelativePath),
             newManifestBytes,
         )
         projectRepository.writeFile(

@@ -22,7 +22,7 @@ class RenameNoteUseCase(
         val newProjectFile = projectRepository.moveFile(
             project = input.project,
             relativePath = input.note.projectFile.relativePath,
-            newRelativePath = input.note.projectFile.relativePath.dirRelativePath.appendRelativePath(
+            newRelativePath = input.note.projectFile.relativePath.dirRelativePath.resolve(
                 RelativePath("${input.newName}.md"),
             ),
             fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,

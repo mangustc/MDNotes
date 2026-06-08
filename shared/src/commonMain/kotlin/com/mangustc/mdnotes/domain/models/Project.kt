@@ -2,7 +2,7 @@ package com.mangustc.mdnotes.domain.models
 
 data class Project(
     val name: String,
-    val rootFileSystemPath: FileSystemPath,
+    val rootDomainFile: DomainFile,
     val notesRelativePath: RelativePath,
     val assetsRelativePath: RelativePath,
 ) {

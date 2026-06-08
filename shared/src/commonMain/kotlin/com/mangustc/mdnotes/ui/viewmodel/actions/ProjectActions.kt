@@ -1,6 +1,6 @@
 package com.mangustc.mdnotes.ui.viewmodel.actions
 
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.usecases.project.LoadSavedProjectUseCase
 import com.mangustc.mdnotes.domain.usecases.project.SelectProjectInput
 import com.mangustc.mdnotes.domain.usecases.project.SelectProjectUseCase
@@ -26,7 +26,7 @@ class ProjectActions(
     private val selectProjectUseCase: SelectProjectUseCase by inject()
     private val getSettingsUseCase: GetSettingsUseCase by inject()
 
-    fun onProjectSelected(projectPath: FileSystemPath) {
+    fun onProjectSelected(projectPath: DomainFile) {
         deps.scope.launch {
             val project = runUseCase(deps.globalActions::onEvent) {
                 selectProjectUseCase(

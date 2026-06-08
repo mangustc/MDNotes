@@ -28,7 +28,7 @@ suspend fun Note.toMessageBody(
             attachments.add(
                 Attachment.InvalidProjectAttachment(
                     type = Attachment.AttachmentType.FILE,
-                    fileSystemPath = projectFile.fileSystemPath,
+                    domainFile = projectFile.domainFile,
                     relativePath = projectFile.relativePath,
                     displayName = payload,
                 ),
@@ -38,7 +38,7 @@ suspend fun Note.toMessageBody(
         attachments.add(
             Attachment.ProjectAttachment(
                 type = attachmentType,
-                fileSystemPath = projectFile.fileSystemPath,
+                domainFile = projectFile.domainFile,
                 relativePath = projectFile.relativePath,
                 displayName = payload,
             ),

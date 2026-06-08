@@ -8,9 +8,8 @@ package com.mangustc.mdnotes.domain.models
  * - Files: "hello/world.md", ".sync_manifest.json"
  * - Directories: "hello", "", "assets/dir"
  */
-data class RelativePath(
-    val value: String,
-) {
+@JvmInline
+value class RelativePath(val value: String) {
     override fun toString(): String {
         return value
     }
@@ -19,10 +18,12 @@ data class RelativePath(
         return value.split("/")
     }
 
-    fun appendRelativePath(relativePath: RelativePath): RelativePath {
+    fun resolve(relativePath: RelativePath): RelativePath {
         if (value.isEmpty()) return relativePath
         return RelativePath("$value/${relativePath.value}")
     }
+
+    operator fun div(child: RelativePath): RelativePath = resolve(child)
 
     val basename: String get() = splitParts().last()
 

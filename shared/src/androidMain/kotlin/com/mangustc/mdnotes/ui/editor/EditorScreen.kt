@@ -1,10 +1,5 @@
 package com.mangustc.mdnotes.ui.editor
 
-import android.net.Uri
-import android.provider.DocumentsContract
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,7 +44,6 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -104,12 +98,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import coil3.compose.AsyncImage
 import com.mangustc.mdnotes.domain.markdown.MarkdownParser
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
@@ -121,6 +114,8 @@ import com.mangustc.mdnotes.ui.components.NoteSearchBar
 import com.mangustc.mdnotes.ui.components.TooltipIconButton
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import mdnotes.shared.generated.resources.Res
 import mdnotes.shared.generated.resources.add_property
 import mdnotes.shared.generated.resources.attach_file
@@ -195,20 +190,17 @@ fun EditorScreen(
         )
     }
 
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia(),
-    ) { uri ->
-        if (uri != null) {
-            viewModel.editor.onEvent(EditorEvent.AttachPhoto(path = FileSystemPath(uri.toString())))
-        }
+    val photoPickerLauncher = rememberFilePickerLauncher(
+        type = FileKitType.Image,
+    ) { file ->
+        if (file == null) return@rememberFilePickerLauncher
+        viewModel.editor.onEvent(EditorEvent.AttachPhoto(path = DomainFile(file)))
     }
-
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri != null) {
-            viewModel.editor.onEvent(EditorEvent.AttachFile(path = FileSystemPath(uri.toString())))
-        }
+    val filePickerLauncher = rememberFilePickerLauncher(
+        type = FileKitType.Image,
+    ) { file ->
+        if (file == null) return@rememberFilePickerLauncher
+        viewModel.editor.onEvent(EditorEvent.AttachFile(path = DomainFile(file)))
     }
 
 
@@ -272,17 +264,13 @@ fun EditorScreen(
                     )
                     TooltipIconButton(
                         onClick = {
-                            photoPickerLauncher.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageOnly,
-                                ),
-                            )
+                            photoPickerLauncher.launch()
                         },
                         icon = Icons.Default.Image,
                         tooltip = stringResource(Res.string.attach_photo),
                     )
                     TooltipIconButton(
-                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                        onClick = { filePickerLauncher.launch() },
                         icon = Icons.Default.AttachFile,
                         tooltip = stringResource(Res.string.attach_file),
                     )
@@ -722,30 +710,8 @@ fun MarkdownImageOverlay(
             .width(with(density) { editorWidth.toDp() })
             .height(with(density) { exactHeightPx.toDp() }),
     ) {
-        AsyncMarkdownImage(
-            path = path,
-            project = project,
-            onRatioMeasured = { newRatio -> onRatioMeasured(path, newRatio) },
-        )
-    }
-}
-
-@Composable
-fun AsyncMarkdownImage(path: String, project: Project, onRatioMeasured: (Float) -> Unit) {
-    var imageUri by remember(path, project) { mutableStateOf<Uri?>(null) }
-
-    LaunchedEffect(path, project) {
-        // TODO: Change uri get and get it from a use case or something
-        val rootUri = project.rootFileSystemPath.value.toUri()
-        val relativePath = RelativePath(path)
-        val treeId = DocumentsContract.getTreeDocumentId(rootUri)
-        val childId = if (relativePath.value.isEmpty()) treeId else "$treeId/${relativePath.value}"
-        imageUri = DocumentsContract.buildDocumentUriUsingTree(rootUri, childId)
-    }
-
-    if (imageUri != null) {
         AsyncImage(
-            model = imageUri,
+            model = (project.rootDomainFile / RelativePath(path)).file,
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Fit,
@@ -753,18 +719,15 @@ fun AsyncMarkdownImage(path: String, project: Project, onRatioMeasured: (Float) 
                 val w = state.painter.intrinsicSize.width
                 val h = state.painter.intrinsicSize.height
                 if (w > 0 && h > 0) {
-                    onRatioMeasured(w / h)
+                    onRatioMeasured(path, w / h)
                 }
             },
         )
-    } else {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator()
-        }
     }
+}
+
+@Composable
+fun AsyncMarkdownImage(path: RelativePath, project: Project, onRatioMeasured: (Float) -> Unit) {
 }
 
 @Composable

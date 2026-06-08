@@ -1,7 +1,6 @@
 package com.mangustc.mdnotes.ui.messenger
 
 import android.content.ClipData
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -120,7 +119,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -130,7 +128,7 @@ import coil3.compose.AsyncImage
 import coil3.network.ktor3.KtorNetworkFetcherFactory
 import com.mangustc.mdnotes.domain.markdown.MarkdownParser
 import com.mangustc.mdnotes.domain.models.Attachment
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.LinkPreview
 import com.mangustc.mdnotes.domain.models.MessageBody
@@ -193,7 +191,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     val attachments = remember { mutableStateListOf<Attachment>() }
-    var imagePagerState by remember { mutableStateOf<Pair<Int, List<FileSystemPath>>?>(null) }
+    var imagePagerState by remember { mutableStateOf<Pair<Int, List<DomainFile>>?>(null) }
     var carouselExpanded by rememberSaveable { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberFilePickerLauncher(
@@ -203,7 +201,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
         files?.forEach { file ->
             attachments.add(
                 Attachment.PendingAttachment(
-                    fileSystemPath = FileSystemPath(file.toString()),
+                    domainFile = DomainFile(file),
                     displayName = file.name,
                     type = Attachment.AttachmentType.IMAGE,
                 ),
@@ -216,7 +214,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
         files?.forEach { file ->
             attachments.add(
                 Attachment.PendingAttachment(
-                    fileSystemPath = FileSystemPath(file.toString()),
+                    domainFile = DomainFile(file),
                     displayName = file.name,
                     type = Attachment.AttachmentType.FILE,
                 ),
@@ -228,7 +226,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
         if (file == null) return@rememberCameraPickerLauncher
         attachments.add(
             Attachment.PendingAttachment(
-                fileSystemPath = FileSystemPath(file.toString()),
+                domainFile = DomainFile(file),
                 displayName = file.name,
                 type = Attachment.AttachmentType.IMAGE,
             ),
@@ -312,7 +310,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 onImageClick = { clickedFileSystemPath ->
                     val imageUris = attachments.mapNotNull {
                         when (it.type) {
-                            Attachment.AttachmentType.IMAGE -> it.fileSystemPath
+                            Attachment.AttachmentType.IMAGE -> it.domainFile
                             Attachment.AttachmentType.FILE -> null
                         }
                     }
@@ -321,7 +319,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 },
                 onFileClick = { uri ->
                     try {
-                        FileKit.openFileWithDefaultApplication(PlatformFile(uri.value))
+                        FileKit.openFileWithDefaultApplication(uri.file)
                     } catch (_: Exception) {
                         viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
                     }
@@ -528,8 +526,8 @@ private fun MessengerInputBar(
     onTakePhoto: () -> Unit,
     onAddImage: () -> Unit,
     onAddFile: () -> Unit,
-    onImageClick: (FileSystemPath) -> Unit,
-    onFileClick: (FileSystemPath) -> Unit,
+    onImageClick: (DomainFile) -> Unit,
+    onFileClick: (DomainFile) -> Unit,
     onRemoveAttachment: (Int) -> Unit,
     onSend: () -> Unit,
     carouselExpanded: Boolean,
@@ -672,8 +670,8 @@ private fun AttachmentCarouselStrip(
     onAddImage: (() -> Unit)? = null,
     onAddFile: (() -> Unit)? = null,
     onRemove: ((Int) -> Unit)? = null,
-    onImageClick: (FileSystemPath) -> Unit,
-    onFileClick: (FileSystemPath) -> Unit,
+    onImageClick: (DomainFile) -> Unit,
+    onFileClick: (DomainFile) -> Unit,
     isViewing: Boolean,
 ) {
     val state = rememberCarouselState { if (isViewing) attachments.size else attachments.size + 3 }
@@ -693,7 +691,7 @@ private fun AttachmentCarouselStrip(
             if (!isViewing && page == 0) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(""),
+                        domainFile = DomainFile(PlatformFile("")),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.take_photo),
                     ),
@@ -703,7 +701,7 @@ private fun AttachmentCarouselStrip(
             } else if (!isViewing && page == 1) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(""),
+                        domainFile = DomainFile(PlatformFile("")),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.attach_images),
                     ),
@@ -713,7 +711,7 @@ private fun AttachmentCarouselStrip(
             } else if (!isViewing && page == 2) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(""),
+                        domainFile = DomainFile(PlatformFile("")),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.attach_files),
                     ),
@@ -726,11 +724,11 @@ private fun AttachmentCarouselStrip(
                     attachment = attachment,
                     onClick = when (attachment.type) {
                         Attachment.AttachmentType.IMAGE -> {
-                            { onImageClick(attachment.fileSystemPath) }
+                            { onImageClick(attachment.domainFile) }
                         }
 
                         Attachment.AttachmentType.FILE -> {
-                            { onFileClick(attachment.fileSystemPath) }
+                            { onFileClick(attachment.domainFile) }
                         }
                     },
                 )
@@ -793,7 +791,7 @@ private fun AttachmentIconButton(
             when (attachment.type) {
                 Attachment.AttachmentType.IMAGE ->
                     AsyncImage(
-                        model = PlatformFile(attachment.fileSystemPath.value),
+                        model = attachment.domainFile.file,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -845,7 +843,7 @@ private fun MessageBubble(
     onNoteSelected: (MessageBody) -> Unit,
     onDeleteNote: (MessageBody) -> Unit,
     onEditNote: (MessageBody, String, List<Attachment>) -> Unit,
-    onImageClick: (Int, List<FileSystemPath>) -> Unit,
+    onImageClick: (Int, List<DomainFile>) -> Unit,
     onPinNote: (MessageBody) -> Unit,
     isPinned: Boolean = false,
     isSelected: Boolean = false,
@@ -961,7 +959,7 @@ private fun MessageBubble(
                                 onImageClick = { clickedUri ->
                                     val imageUris = message.attachments.mapNotNull {
                                         when (it.type) {
-                                            Attachment.AttachmentType.IMAGE -> it.fileSystemPath
+                                            Attachment.AttachmentType.IMAGE -> it.domainFile
                                             else -> null
                                         }
                                     }
@@ -969,7 +967,7 @@ private fun MessageBubble(
                                 },
                                 onFileClick = { uri ->
                                     try {
-                                        FileKit.openFileWithDefaultApplication(PlatformFile(uri.value))
+                                        FileKit.openFileWithDefaultApplication(uri.file)
                                     } catch (_: Exception) {
                                         onNoAppFound()
                                     }
@@ -1204,7 +1202,7 @@ private fun PinnedMessageBanner(
 @Composable
 private fun FullScreenImageCarouselDialog(
     initialIndex: Int,
-    uris: List<FileSystemPath>,
+    uris: List<DomainFile>,
     onDismiss: () -> Unit,
 ) {
     val state = rememberCarouselState(initialItem = initialIndex) { uris.size }
@@ -1231,7 +1229,7 @@ private fun FullScreenImageCarouselDialog(
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 ZoomableImage(
-                    uri = uris[page].value.toUri(),
+                    file = uris[page],
                     onTap = { showTopPanel = !showTopPanel },
                 )
             }
@@ -1276,7 +1274,7 @@ private fun FullScreenImageCarouselDialog(
 }
 
 @Composable
-private fun ZoomableImage(uri: Uri, onTap: () -> Unit) {
+private fun ZoomableImage(file: DomainFile, onTap: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
@@ -1335,7 +1333,7 @@ private fun ZoomableImage(uri: Uri, onTap: () -> Unit) {
             },
     ) {
         AsyncImage(
-            model = uri,
+            model = file,
             contentDescription = null,
             contentScale = ContentScale.Fit,
             modifier = Modifier

@@ -1,6 +1,6 @@
 package com.mangustc.mdnotes.domain.usecases.project
 
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.ProjectFile
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
@@ -8,7 +8,7 @@ import com.mangustc.mdnotes.domain.usecases.UseCase
 
 data class CopyToAssetsInput(
     val project: Project,
-    val assetPath: FileSystemPath,
+    val assetPath: DomainFile,
 )
 
 class CopyToAssetsUseCase(

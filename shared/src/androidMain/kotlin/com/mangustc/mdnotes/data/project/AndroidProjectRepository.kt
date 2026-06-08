@@ -1,10 +1,6 @@
 package com.mangustc.mdnotes.data.project
 
 import android.content.Context
-import android.net.Uri
-import android.provider.DocumentsContract
-import android.webkit.MimeTypeMap
-import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
@@ -18,7 +14,7 @@ import com.mangustc.mdnotes.domain.exceptions.FileNotFoundException
 import com.mangustc.mdnotes.domain.exceptions.FileNotReadableException
 import com.mangustc.mdnotes.domain.exceptions.FileNotWritableException
 import com.mangustc.mdnotes.domain.exceptions.ProjectAccessException
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.Project
@@ -26,12 +22,26 @@ import com.mangustc.mdnotes.domain.models.ProjectFile
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SearchQuery
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.createDirectories
+import io.github.vinceglb.filekit.delete
+import io.github.vinceglb.filekit.dialogs.toAndroidUri
+import io.github.vinceglb.filekit.div
+import io.github.vinceglb.filekit.exists
+import io.github.vinceglb.filekit.extension
+import io.github.vinceglb.filekit.isDirectory
+import io.github.vinceglb.filekit.isRegularFile
+import io.github.vinceglb.filekit.lastModified
+import io.github.vinceglb.filekit.name
+import io.github.vinceglb.filekit.nameWithoutExtension
+import io.github.vinceglb.filekit.parent
+import io.github.vinceglb.filekit.readBytes
+import io.github.vinceglb.filekit.readString
+import io.github.vinceglb.filekit.write
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.io.InputStream
-import java.io.OutputStream
 
 class AndroidProjectRepository(
     private val context: Context,
@@ -76,21 +86,21 @@ class AndroidProjectRepository(
         includeText: Boolean,
         includeFrontMatter: Boolean,
     ): Note = withContext(Dispatchers.IO) {
-        val uri = getUri(project.rootFileSystemPath.value.toUri(), relativePath)
-        val fullText = readFullText(uri)
+        val file = getFile(project, relativePath)
+        val fullText = try {
+            file.file.readString()
+        } catch (e: Exception) {
+            throw FileNotReadableException(relativePath.value, e)
+        }
         val (frontMatter, text) = FrontMatter.splitFromContent(fullText)
-        val documentFile = DocumentFile.fromSingleUri(context, uri)
-            ?: throw FileNotFoundException(relativePath.value)
-        val name = documentFile.name?.removeSuffix(".md")
-            ?: throw FileNotReadableException(relativePath.value)
 
         Note(
-            name = name,
+            name = file.nameWithoutExtension,
             projectFile = ProjectFile(
-                fileSystemPath = FileSystemPath(uri.toString()),
+                domainFile = file,
                 relativePath = relativePath,
             ),
-            lastModified = documentFile.lastModified(),
+            lastModified = file.file.lastModified().toEpochMilliseconds(),
             createdAt = frontMatter.toCreatedAtMillis(),
             tags = frontMatter.tags,
             body = if (includeText && includeFrontMatter) {
@@ -108,9 +118,11 @@ class AndroidProjectRepository(
         val projectId = getOrCreateProjectId(project)
             ?: throw ProjectAccessException(project.notesRelativePath.value)
 
-        val projectUri = project.rootFileSystemPath.value.toUri()
         val notesDir =
-            DocumentFile.fromTreeUri(context, getUri(projectUri, project.notesRelativePath))
+            DocumentFile.fromTreeUri(
+                context,
+                getFile(project, project.notesRelativePath).file.toAndroidUri(),
+            )
                 ?: throw ProjectAccessException(project.notesRelativePath.value)
         val files =
             notesDir.listFiles().filter { it.name?.endsWith(".md") == true }
@@ -123,7 +135,11 @@ class AndroidProjectRepository(
             val cached = existingUris[uriStr]
 
             if (cached == null || file.lastModified() > cached.lastModified) {
-                val fullText = readFullText(file.uri)
+                val fullText = try {
+                    PlatformFile(file.uri).readString()
+                } catch (e: Exception) {
+                    throw FileNotReadableException(file.name ?: "", e)
+                }
                 val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
                 val tags = frontMatter.toTagString()
                 val name = file.name?.removeSuffix(".md")
@@ -149,21 +165,28 @@ class AndroidProjectRepository(
         }
     }
 
-    override suspend fun buildProject(projectPath: FileSystemPath): Project =
+    override suspend fun buildProject(projectPath: DomainFile): Project =
         withContext(Dispatchers.IO) {
-            val root = DocumentFile.fromTreeUri(context, projectPath.value.toUri())
-                ?: throw ProjectAccessException(projectPath.value)
-            val notesDirPath = Project.DefaultNotesRelativePath.value
-            val assetsDirPath = Project.DefaultAssetsRelativePath.value
-            val name = root.name
-                ?: throw ProjectAccessException(projectPath.value)
-            root.findFile(notesDirPath) ?: root.createDirectory(notesDirPath)
-            ?: throw ProjectAccessException(notesDirPath)
-            root.findFile(assetsDirPath) ?: root.createDirectory(assetsDirPath)
-            ?: throw ProjectAccessException(assetsDirPath)
+            val projectFile = projectPath.file
+            if (!projectFile.isDirectory()) throw ProjectAccessException(projectPath.name)
+
+            val notesFile = (projectPath / Project.DefaultNotesRelativePath).file
+            if (notesFile.exists()) {
+                if (!notesFile.isDirectory()) throw ProjectAccessException(projectPath.name)
+            } else {
+                notesFile.createDirectories()
+            }
+
+            val assetsFile = (projectPath / Project.DefaultAssetsRelativePath).file
+            if (assetsFile.exists()) {
+                if (!assetsFile.isDirectory()) throw ProjectAccessException(projectPath.name)
+            } else {
+                assetsFile.createDirectories()
+            }
+
             Project(
-                name = name,
-                rootFileSystemPath = FileSystemPath(projectPath.toString()),
+                name = projectPath.name,
+                rootDomainFile = DomainFile(projectFile),
                 notesRelativePath = Project.DefaultNotesRelativePath,
                 assetsRelativePath = Project.DefaultAssetsRelativePath,
             )
@@ -171,47 +194,28 @@ class AndroidProjectRepository(
 
     override suspend fun copyFromFileSystem(
         project: Project,
-        fromPath: FileSystemPath,
+        fromPath: DomainFile,
         toDirPath: RelativePath,
     ): ProjectFile =
         withContext(Dispatchers.IO) {
-            val resolver = context.contentResolver
-            val assetUri = fromPath.value.toUri()
-            val sourceFile = DocumentFile.fromSingleUri(context, assetUri)
-                ?: throw FileNotReadableException(fromPath.value)
-            val fileName = sourceFile.name
-                ?: throw FileNotReadableException(fromPath.value)
-            val mimeType = resolver.getType(assetUri) ?: "application/octet-stream"
-
-            val rootUri = project.rootFileSystemPath.value.toUri()
-            val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
-                ?: throw ProjectAccessException(project.rootFileSystemPath.value)
-
-            val dir = findDocumentFile(rootDoc, toDirPath)
-            val targetFile = dir.createFile(mimeType, fileName)
-                ?: throw FileNotWritableException(toDirPath.appendRelativePath(RelativePath(fileName)).value)
-
-            try {
-                copyFullText(sourceFile.uri, targetFile.uri)
+            val bytes = try {
+                fromPath.file.readBytes()
             } catch (e: Exception) {
-                targetFile.delete()
-                throw e
+                throw FileNotReadableException(fromPath.name, e)
             }
 
-            ProjectFile(
-                fileSystemPath = FileSystemPath(targetFile.uri.toString()),
-                relativePath = toDirPath.appendRelativePath(
-                    RelativePath(
-                        targetFile.name
-                            ?: throw FileNotWritableException(targetFile.uri.toString()),
-                    ),
-                ),
+            writeFile(
+                project = project,
+                relativePath = toDirPath / RelativePath(fromPath.name),
+                byteArray = bytes,
+                fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
+                createParents = true,
             )
         }
 
     override suspend fun getAllTags(project: Project): List<String> = withContext(Dispatchers.IO) {
         val projectId = getOrCreateProjectId(project)
-            ?: throw ProjectAccessException(project.rootFileSystemPath.value)
+            ?: throw ProjectAccessException(project.rootDomainFile.name)
         noteDao.getAllTags(projectId).flatMap { it.split(" ") }.filter { it.isNotBlank() }
             .distinct()
     }
@@ -223,62 +227,42 @@ class AndroidProjectRepository(
         fileExistsStrategy: ProjectRepository.FileExistsStrategy,
         createParents: Boolean,
     ): ProjectFile = withContext(Dispatchers.IO) {
-        val rootUri = project.rootFileSystemPath.value.toUri()
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
-            ?: throw ProjectAccessException(project.rootFileSystemPath.value)
-
-        val fileName = relativePath.basename
-        val dirParts = relativePath.dirRelativePath.splitParts()
-
-        var currentDir = rootDoc
-        for (part in dirParts) {
-            if (part.isEmpty()) continue
-            var nextDir = currentDir.findFile(part)
-            if (nextDir == null) {
-                if (createParents) {
-                    nextDir = currentDir.createDirectory(part)
-                        ?: throw FileNotWritableException(relativePath.value)
-                } else {
-                    throw FileNotFoundException(relativePath.value)
+        val file = getFile(project, relativePath).file.let { file ->
+            if (file.exists()) {
+                if (!file.isRegularFile()) throw FileNotWritableException(relativePath.value)
+                when (fileExistsStrategy) {
+                    ProjectRepository.FileExistsStrategy.OVERWRITE -> return@let file
+                    ProjectRepository.FileExistsStrategy.AUTO_RENAME -> {
+                        val name = file.nameWithoutExtension
+                        val extension = file.extension
+                        val parent =
+                            file.parent() ?: throw FileNotWritableException(relativePath.value)
+                        for (i in 1..MAX_RENAME_TRIES) {
+                            val newFile = parent / "$name - $i.$extension"
+                            if (!newFile.exists()) return@let newFile
+                        }
+                        throw FileNotWritableException(relativePath.value)
+                    }
                 }
-            } else if (!nextDir.isDirectory) {
-                throw FileNotWritableException(relativePath.value)
+            } else {
+                if (createParents) {
+                    file.parent()?.let {
+                        if (!it.exists()) it.createDirectories()
+                    }
+                }
+                file
             }
-            currentDir = nextDir
         }
 
-        var fileDoc = currentDir.findFile(fileName)
-        val shouldCreateFile =
-            fileDoc == null || fileExistsStrategy == ProjectRepository.FileExistsStrategy.AUTO_RENAME
-        if (!shouldCreateFile) {
-            if (fileDoc.isDirectory) {
-                throw FileNotWritableException(relativePath.value)
-            }
-            if (fileExistsStrategy != ProjectRepository.FileExistsStrategy.OVERWRITE) {
-                throw FileNotWritableException(relativePath.value)
-            }
-        } else {
-            val extension = fileName.substringAfterLast('.', "")
-            val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
-                ?: "application/octet-stream"
-            fileDoc = currentDir.createFile(mimeType, fileName)
-                ?: throw FileNotWritableException(relativePath.value)
-        }
-
-        val output = openOutputStream(fileDoc.uri, "wt")
         try {
-            output.use { outputStream ->
-                outputStream.write(byteArray)
-            }
+            file.write(byteArray)
         } catch (e: Exception) {
             throw FileNotWritableException(relativePath.value, e)
         }
 
-        val actualName = fileDoc.name
-            ?: throw FileNotWritableException(relativePath.value)
         ProjectFile(
-            fileSystemPath = FileSystemPath(fileDoc.uri.toString()),
-            relativePath = relativePath.dirRelativePath.appendRelativePath(RelativePath(actualName)),
+            domainFile = DomainFile(file),
+            relativePath = relativePath.dirRelativePath.resolve(RelativePath(file.name)),
         )
     }
 
@@ -286,18 +270,13 @@ class AndroidProjectRepository(
         project: Project,
         relativePath: RelativePath,
     ) = withContext(Dispatchers.IO) {
-        val rootUri = project.rootFileSystemPath.value.toUri()
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri) ?: return@withContext
+        val file = getFile(project, relativePath)
 
-        if (relativePath.value.isEmpty()) {
+        if (!file.file.isRegularFile()) {
             return@withContext
         }
 
-        try {
-            findDocumentFile(rootDoc, relativePath).delete()
-        } catch (_: Exception) {
-            return@withContext
-        }
+        file.file.delete(mustExist = false)
     }
 
     override suspend fun copyFile(
@@ -334,21 +313,14 @@ class AndroidProjectRepository(
         project: Project,
         relativePath: RelativePath,
     ): ByteArray = withContext(Dispatchers.IO) {
-        val rootUri = project.rootFileSystemPath.value.toUri()
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
-            ?: throw ProjectAccessException(project.rootFileSystemPath.value)
+        val file = getFile(project, relativePath)
 
-        val targetDoc = findDocumentFile(rootDoc, relativePath)
-
-        if (!targetDoc.isFile) {
+        if (!file.file.isRegularFile()) {
             throw FileNotReadableException(relativePath.value)
         }
 
-        val input = openInputStream(targetDoc.uri)
         try {
-            input.use { inputStream ->
-                inputStream.readBytes()
-            }
+            file.file.readBytes()
         } catch (e: Exception) {
             throw FileNotReadableException(relativePath.value, e)
         }
@@ -357,9 +329,9 @@ class AndroidProjectRepository(
     override suspend fun getProjectFilesList(
         project: Project,
     ): List<ProjectFile> = withContext(Dispatchers.IO) {
-        val rootUri = project.rootFileSystemPath.value.toUri()
+        val rootUri = project.rootDomainFile.file.toAndroidUri()
         val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
-            ?: throw ProjectAccessException(project.rootFileSystemPath.value)
+            ?: throw ProjectAccessException(project.rootDomainFile.name)
 
         val result = mutableListOf<ProjectFile>()
         walkDocumentTree(rootDoc, RelativePath(""), result)
@@ -370,21 +342,14 @@ class AndroidProjectRepository(
         project: Project,
         relativePath: RelativePath,
     ): ProjectFile = withContext(Dispatchers.IO) {
-        val rootUri = project.rootFileSystemPath.value.toUri()
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
-            ?: throw ProjectAccessException(project.rootFileSystemPath.value)
-        val targetDoc = findDocumentFile(rootDoc, relativePath)
-
         return@withContext ProjectFile(
-            fileSystemPath = FileSystemPath(
-                targetDoc.uri.toString(),
-            ),
+            domainFile = getFile(project, relativePath),
             relativePath = relativePath,
         )
     }
 
     private suspend fun getOrCreateProjectId(project: Project): Long? {
-        val rootPath = project.rootFileSystemPath.value
+        val rootPath = project.rootDomainFile.path
         val existingId = projectDao.getProjectId(rootPath)
         if (existingId != null) return existingId
 
@@ -399,15 +364,6 @@ class AndroidProjectRepository(
         return projectDao.getProjectId(rootPath)
     }
 
-    private fun getUri(
-        rootUri: Uri,
-        relativePath: RelativePath,
-    ): Uri {
-        val treeId = DocumentsContract.getTreeDocumentId(rootUri)
-        val childId = if (relativePath.value.isEmpty()) treeId else "$treeId/${relativePath.value}"
-        return DocumentsContract.buildDocumentUriUsingTree(rootUri, childId)
-    }
-
     private fun walkDocumentTree(
         dir: DocumentFile,
         prefix: RelativePath,
@@ -415,13 +371,13 @@ class AndroidProjectRepository(
     ) {
         dir.listFiles().forEach { file ->
             val name = file.name ?: return@forEach
-            val relPath = prefix.appendRelativePath(RelativePath(name))
+            val relPath = prefix.resolve(RelativePath(name))
             if (file.isDirectory) {
                 walkDocumentTree(file, relPath, out)
             } else {
                 out.add(
                     ProjectFile(
-                        fileSystemPath = FileSystemPath(file.uri.toString()),
+                        domainFile = DomainFile(PlatformFile(file.uri.toString())),
                         relativePath = relPath,
                     ),
                 )
@@ -440,45 +396,13 @@ class AndroidProjectRepository(
         return current
     }
 
-    private fun readFullText(uri: Uri): String {
-        val stream = openInputStream(uri)
-
-        return try {
-            stream.bufferedReader().use { reader ->
-                reader.readText()
-            }
-        } catch (e: Exception) {
-            throw FileNotReadableException(uri.toString(), e)
-        }
+    private fun getFile(project: Project, relativePath: RelativePath): DomainFile {
+        val domainFile = project.rootDomainFile / relativePath
+        if (!domainFile.file.exists()) throw FileNotFoundException(relativePath.value)
+        return domainFile
     }
 
-    private fun copyFullText(sourceUri: Uri, targetUri: Uri) {
-        val input = openInputStream(sourceUri)
-        val output = openOutputStream(targetUri)
-
-        try {
-            input.use { inputStream ->
-                output.use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-        } catch (e: Exception) {
-            throw FileNotWritableException(targetUri.toString(), e)
-        }
+    companion object {
+        const val MAX_RENAME_TRIES = 999
     }
-
-    private fun openInputStream(uri: Uri): InputStream =
-        try {
-            context.contentResolver.openInputStream(uri)
-        } catch (e: Exception) {
-            throw FileNotFoundException(uri.toString(), e)
-        } ?: throw FileNotFoundException(uri.toString())
-
-    private fun openOutputStream(uri: Uri, mode: String = "w"): OutputStream =
-        try {
-            context.contentResolver.openOutputStream(uri, mode)
-        } catch (e: Exception) {
-            throw FileNotFoundException(uri.toString(), e)
-        } ?: throw FileNotFoundException(uri.toString())
-
 }

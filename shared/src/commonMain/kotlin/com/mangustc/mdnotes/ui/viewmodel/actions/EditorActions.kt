@@ -186,7 +186,7 @@ class EditorActions(
                             ),
                         )
                     }.getOrElse { return@launch }
-                    deps.globalActions.onEvent(NavigationEvent.OpenFile(projectFile.fileSystemPath))
+                    deps.globalActions.onEvent(NavigationEvent.OpenFile(projectFile.domainFile))
                 }
 
                 SpanInfo.Link.LinkType.HTTP -> {

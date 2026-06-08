@@ -1,7 +1,7 @@
 package com.mangustc.mdnotes.domain.repositories
 
 import androidx.paging.PagingData
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.ProjectFile
@@ -33,11 +33,11 @@ interface ProjectRepository {
         includeFrontMatter: Boolean = true,
     ): Note
 
-    suspend fun buildProject(projectPath: FileSystemPath): Project
+    suspend fun buildProject(projectPath: DomainFile): Project
     suspend fun syncDatabase(project: Project)
     suspend fun copyFromFileSystem(
         project: Project,
-        fromPath: FileSystemPath,
+        fromPath: DomainFile,
         toDirPath: RelativePath,
     ): ProjectFile
 

@@ -92,7 +92,7 @@ class SendNoteUseCase(
                             copyToAssetsUseCase(
                                 CopyToAssetsInput(
                                     project = input.project,
-                                    assetPath = attachment.fileSystemPath,
+                                    assetPath = attachment.domainFile,
                                 ),
                             )
                         append("\n$firstPart(<${projectFile.relativePath.value}>)")

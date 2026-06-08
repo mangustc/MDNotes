@@ -31,7 +31,7 @@ class CreateNoteUseCase(
 
         val newProjectFile = projectRepository.writeFile(
             project = input.project,
-            relativePath = input.project.notesRelativePath.appendRelativePath(RelativePath("${input.name}.md")),
+            relativePath = input.project.notesRelativePath.resolve(RelativePath("${input.name}.md")),
             byteArray = initialContent.toByteArray(),
             fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
         )

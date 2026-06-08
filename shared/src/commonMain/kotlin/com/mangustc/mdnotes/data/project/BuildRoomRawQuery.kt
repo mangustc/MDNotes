@@ -19,7 +19,7 @@ fun SearchQuery.buildRoomRawQuery(project: Project): RoomRawQuery {
 
     val conditions = mutableListOf<String>()
     conditions.add("notes.projectId = (SELECT id FROM projects WHERE rootPath = ? LIMIT 1)")
-    args.add(project.rootFileSystemPath.value)
+    args.add(project.rootDomainFile.path)
     for (term in negatedBodyTerms) {
         conditions.add("notes.body NOT LIKE ?")
         args.add("%$term%")

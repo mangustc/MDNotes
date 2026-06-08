@@ -1,10 +1,7 @@
 package com.mangustc.mdnotes.ui
 
 import android.content.ClipData
-import android.content.Intent
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,7 +80,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -91,7 +87,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import androidx.paging.compose.collectAsLazyPagingItems
-import com.mangustc.mdnotes.domain.models.FileSystemPath
+import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.ui.components.NoteDrawerItem
@@ -108,6 +104,9 @@ import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.ClipboardEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
+import io.github.vinceglb.filekit.dialogs.openFileWithDefaultApplication
 import mdnotes.shared.generated.resources.Res
 import mdnotes.shared.generated.resources.app_name
 import mdnotes.shared.generated.resources.are_you_sure_you_want_to_delete_this_note
@@ -156,10 +155,9 @@ actual fun AppScaffold(
 
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
 
-    val folderPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree(),
-    ) { uri ->
-        uri?.let { appViewModel.project.onProjectSelected(FileSystemPath(it.toString())) }
+    val folderPicker = rememberDirectoryPickerLauncher() { directory ->
+        if (directory == null) return@rememberDirectoryPickerLauncher
+        appViewModel.project.onProjectSelected(DomainFile(directory))
     }
 
     val clipboard = LocalClipboard.current
@@ -179,15 +177,7 @@ actual fun AppScaffold(
                 is NavigationEvent.CloseDrawer -> drawerState.close()
                 is NavigationEvent.OpenUrl -> uriHandler.openUri(it.url)
                 is NavigationEvent.OpenFile -> {
-                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                        val uri = it.uri.value.toUri()
-                        setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                    }
+                    FileKit.openFileWithDefaultApplication(it.uri.file)
                 }
             }
         }
@@ -270,11 +260,11 @@ actual fun AppScaffold(
                                     }
                                     if (uiState.project != null) {
                                         SplitButtonDefaults.TonalLeadingButton(
-                                            onClick = { folderPicker.launch(null) },
+                                            onClick = { folderPicker.launch() },
                                         ) { content() }
                                     } else {
                                         Button(
-                                            onClick = { folderPicker.launch(null) },
+                                            onClick = { folderPicker.launch() },
                                             shapes = ButtonDefaults.shapes(),
                                         ) { content() }
                                     }
