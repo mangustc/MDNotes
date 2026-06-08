@@ -34,7 +34,6 @@ import io.github.vinceglb.filekit.isRegularFile
 import io.github.vinceglb.filekit.lastModified
 import io.github.vinceglb.filekit.name
 import io.github.vinceglb.filekit.nameWithoutExtension
-import io.github.vinceglb.filekit.parent
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.readString
 import io.github.vinceglb.filekit.write
@@ -227,7 +226,7 @@ class AndroidProjectRepository(
         fileExistsStrategy: ProjectRepository.FileExistsStrategy,
         createParents: Boolean,
     ): ProjectFile = withContext(Dispatchers.IO) {
-        val file = getFile(project, relativePath).file.let { file ->
+        val file = (project.rootDomainFile / relativePath).file.let { file ->
             if (file.exists()) {
                 if (!file.isRegularFile()) throw FileNotWritableException(relativePath.value)
                 when (fileExistsStrategy) {
@@ -235,8 +234,7 @@ class AndroidProjectRepository(
                     ProjectRepository.FileExistsStrategy.AUTO_RENAME -> {
                         val name = file.nameWithoutExtension
                         val extension = file.extension
-                        val parent =
-                            file.parent() ?: throw FileNotWritableException(relativePath.value)
+                        val parent = (project.rootDomainFile / relativePath.dirRelativePath).file
                         for (i in 1..MAX_RENAME_TRIES) {
                             val newFile = parent / "$name - $i.$extension"
                             if (!newFile.exists()) return@let newFile
@@ -246,8 +244,13 @@ class AndroidProjectRepository(
                 }
             } else {
                 if (createParents) {
-                    file.parent()?.let {
-                        if (!it.exists()) it.createDirectories()
+                    try {
+                        val parent = (project.rootDomainFile / relativePath.dirRelativePath).file
+                        parent.let {
+                            if (!it.exists()) it.createDirectories()
+                        }
+                    } catch (e: Exception) {
+                        throw FileNotWritableException(relativePath.value, e)
                     }
                 }
                 file
@@ -383,17 +386,6 @@ class AndroidProjectRepository(
                 )
             }
         }
-    }
-
-    private fun findDocumentFile(rootDoc: DocumentFile, relativePath: RelativePath): DocumentFile {
-        val parts = relativePath.splitParts()
-        var current = rootDoc
-        for (part in parts) {
-            if (part.isEmpty()) continue
-            current = current.findFile(part)
-                ?: throw FileNotFoundException(relativePath.value)
-        }
-        return current
     }
 
     private fun getFile(project: Project, relativePath: RelativePath): DomainFile {
