@@ -8,7 +8,6 @@ import java.util.Locale
 import kotlin.time.Clock
 
 class AndroidDateFormatter : DateFormatter {
-
     override fun formatRelativeTime(timeMillis: Long, maxTimeMillis: Long?): String {
         if (maxTimeMillis != null) {
             val currentMillis = Clock.System.now().toEpochMilliseconds()
