@@ -82,6 +82,9 @@ kotlin {
             implementation(libs.cryptography.core)
             implementation(libs.cryptography.provider.optimal)
             implementation(libs.jetbrains.markdown)
+            implementation(libs.filekit.core)
+            implementation(libs.filekit.dialogs.compose)
+            implementation(libs.filekit.coil)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

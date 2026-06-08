@@ -12,6 +12,8 @@ import androidx.documentfile.provider.DocumentFile
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.FileSystemPath
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.dialogs.init
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MainActivity : ComponentActivity() {
@@ -19,6 +21,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FileKit.init(this)
+
         enableEdgeToEdge()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 

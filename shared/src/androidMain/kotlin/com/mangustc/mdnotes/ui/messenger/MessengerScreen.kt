@@ -1,14 +1,8 @@
 package com.mangustc.mdnotes.ui.messenger
 
 import android.content.ClipData
-import android.content.ContentValues
-import android.content.Intent
 import android.net.Uri
-import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -127,7 +121,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import androidx.core.net.toUri
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
@@ -149,6 +142,14 @@ import com.mangustc.mdnotes.ui.util.DateFormatter
 import com.mangustc.mdnotes.ui.util.scrollbar
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
+import io.github.vinceglb.filekit.FileKit
+import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.dialogs.FileKitMode
+import io.github.vinceglb.filekit.dialogs.FileKitType
+import io.github.vinceglb.filekit.dialogs.compose.rememberCameraPickerLauncher
+import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
+import io.github.vinceglb.filekit.dialogs.openFileWithDefaultApplication
+import io.github.vinceglb.filekit.name
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.request.header
@@ -169,9 +170,7 @@ import mdnotes.shared.generated.resources.edit
 import mdnotes.shared.generated.resources.edit_note
 import mdnotes.shared.generated.resources.edited_date
 import mdnotes.shared.generated.resources.editing_note
-import mdnotes.shared.generated.resources.file
 import mdnotes.shared.generated.resources.go_back
-import mdnotes.shared.generated.resources.image
 import mdnotes.shared.generated.resources.new_quick_note
 import mdnotes.shared.generated.resources.no_quick_notes_yet_type_something_below_to_get_started
 import mdnotes.shared.generated.resources.open
@@ -196,64 +195,45 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val attachments = remember { mutableStateListOf<Attachment>() }
     var imagePagerState by remember { mutableStateOf<Pair<Int, List<FileSystemPath>>?>(null) }
     var carouselExpanded by rememberSaveable { mutableStateOf(false) }
-    LocalResources.current
-    val context = LocalContext.current
 
-    val defaultImageString = stringResource(Res.string.image)
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickMultipleVisualMedia(),
-    ) { uris ->
-        uris.forEach { uri ->
-            val displayName = DocumentFile.fromSingleUri(context, uri)?.name ?: defaultImageString
+    val imagePickerLauncher = rememberFilePickerLauncher(
+        mode = FileKitMode.Multiple(),
+        type = FileKitType.Image,
+    ) { files ->
+        files?.forEach { file ->
             attachments.add(
                 Attachment.PendingAttachment(
-                    fileSystemPath = FileSystemPath(uri.toString()),
-                    displayName = displayName,
+                    fileSystemPath = FileSystemPath(file.toString()),
+                    displayName = file.name,
                     type = Attachment.AttachmentType.IMAGE,
                 ),
             )
         }
     }
-    val defaultFileString = stringResource(Res.string.file)
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenMultipleDocuments(),
-    ) { uris ->
-        uris.forEach { uri ->
-            val displayName =
-                DocumentFile.fromSingleUri(context, uri)?.name ?: defaultFileString
+    val filePickerLauncher = rememberFilePickerLauncher(
+        mode = FileKitMode.Multiple(),
+    ) { files ->
+        files?.forEach { file ->
             attachments.add(
                 Attachment.PendingAttachment(
-                    fileSystemPath = FileSystemPath(uri.toString()),
-                    displayName = displayName,
+                    fileSystemPath = FileSystemPath(file.toString()),
+                    displayName = file.name,
                     type = Attachment.AttachmentType.FILE,
                 ),
             )
         }
     }
 
-    var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
-    val cameraLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.TakePicture(),
-    ) { success ->
-        if (success) {
-            tempCameraUri?.let { uri ->
-                val displayName = "Camera_${System.currentTimeMillis()}.jpg"
-                attachments.add(
-                    Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(uri.toString()),
-                        displayName = displayName,
-                        type = Attachment.AttachmentType.IMAGE,
-                    ),
-                )
-            }
-        } else {
-            tempCameraUri?.let { uri ->
-                try {
-                    context.contentResolver.delete(uri, null, null)
-                } catch (_: Exception) {
-                }
-            }
-        }
+    val cameraLauncher = rememberCameraPickerLauncher { file ->
+        if (file == null) return@rememberCameraPickerLauncher
+        attachments.add(
+            Attachment.PendingAttachment(
+                fileSystemPath = FileSystemPath(file.toString()),
+                displayName = file.name,
+                type = Attachment.AttachmentType.IMAGE,
+            ),
+        )
+
     }
 
     LaunchedEffect(Unit) {
@@ -320,32 +300,15 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 },
                 onTakePhoto = {
                     try {
-                        val contentValues = ContentValues().apply {
-                            put(
-                                MediaStore.Images.Media.DISPLAY_NAME,
-                                "Camera_${System.currentTimeMillis()}.jpg",
-                            )
-                            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                        }
-                        val uri = context.contentResolver.insert(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            contentValues,
-                        )
-                        if (uri != null) {
-                            cameraLauncher.launch(uri)
-                        } else {
-                            viewModel.onEvent(NotificationEvent.FailedToAddPhoto)
-                        }
+                        cameraLauncher.launch()
                     } catch (_: Exception) {
                         viewModel.onEvent(NotificationEvent.FailedToStartCamera)
                     }
                 },
                 onAddImage = {
-                    imagePickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                    )
+                    imagePickerLauncher.launch()
                 },
-                onAddFile = { filePickerLauncher.launch(arrayOf("*/*")) },
+                onAddFile = { filePickerLauncher.launch() },
                 onImageClick = { clickedFileSystemPath ->
                     val imageUris = attachments.mapNotNull {
                         when (it.type) {
@@ -358,16 +321,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 },
                 onFileClick = { uri ->
                     try {
-                        val mime =
-                            context.contentResolver.getType(uri.value.toUri())
-                                ?: "*/*"
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(uri.value.toUri(), mime)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(
-                            Intent.createChooser(intent, null),
-                        )
+                        FileKit.openFileWithDefaultApplication(PlatformFile(uri.value))
                     } catch (_: Exception) {
                         viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
                     }
@@ -582,7 +536,6 @@ private fun MessengerInputBar(
     onCarouselExpandClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    LocalResources.current
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
@@ -740,7 +693,7 @@ private fun AttachmentCarouselStrip(
             if (!isViewing && page == 0) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(Uri.EMPTY.toString()),
+                        fileSystemPath = FileSystemPath(""),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.take_photo),
                     ),
@@ -750,7 +703,7 @@ private fun AttachmentCarouselStrip(
             } else if (!isViewing && page == 1) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(Uri.EMPTY.toString()),
+                        fileSystemPath = FileSystemPath(""),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.attach_images),
                     ),
@@ -760,7 +713,7 @@ private fun AttachmentCarouselStrip(
             } else if (!isViewing && page == 2) {
                 AttachmentIconButton(
                     attachment = Attachment.PendingAttachment(
-                        fileSystemPath = FileSystemPath(Uri.EMPTY.toString()),
+                        fileSystemPath = FileSystemPath(""),
                         type = Attachment.AttachmentType.FILE,
                         displayName = stringResource(Res.string.attach_files),
                     ),
@@ -840,7 +793,7 @@ private fun AttachmentIconButton(
             when (attachment.type) {
                 Attachment.AttachmentType.IMAGE ->
                     AsyncImage(
-                        model = attachment.fileSystemPath.value.toUri(),
+                        model = PlatformFile(attachment.fileSystemPath.value),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -902,13 +855,11 @@ private fun MessageBubble(
     onNoAppFound: () -> Unit,
     dateFormatter: DateFormatter,
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboard.current
     val uriHandler = LocalUriHandler.current
     val focusManager = LocalFocusManager.current
-    LocalResources.current
 
     val urls =
         remember(message.note.body) { message.links.map { it.value }.toList() }
@@ -1018,14 +969,7 @@ private fun MessageBubble(
                                 },
                                 onFileClick = { uri ->
                                     try {
-                                        val mime =
-                                            context.contentResolver.getType(uri.value.toUri())
-                                                ?: "*/*"
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(uri.value.toUri(), mime)
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                        }
-                                        context.startActivity(Intent.createChooser(intent, null))
+                                        FileKit.openFileWithDefaultApplication(PlatformFile(uri.value))
                                     } catch (_: Exception) {
                                         onNoAppFound()
                                     }
