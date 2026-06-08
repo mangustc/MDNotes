@@ -123,7 +123,7 @@ fun AppScaffold(
 
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
 
-    val folderPicker = rememberDirectoryPickerLauncher() { directory ->
+    val folderPicker = rememberDirectoryPickerLauncher { directory ->
         if (directory == null) return@rememberDirectoryPickerLauncher
         appViewModel.project.onProjectSelected(DomainFile(directory))
     }
