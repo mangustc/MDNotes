@@ -48,6 +48,8 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.icu)
+            implementation(libs.kotlin.io)
         }
 
         commonMain.dependencies {
