@@ -82,10 +82,8 @@ import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -727,19 +725,12 @@ fun MarkdownImageOverlay(
 }
 
 @Composable
-fun AsyncMarkdownImage(path: RelativePath, project: Project, onRatioMeasured: (Float) -> Unit) {
-}
-
-@Composable
 fun MarkdownLinkOverlay(
     span: SpanInfo.Link,
     state: TextFieldState,
     layoutResult: TextLayoutResult,
     viewModel: AppViewModel,
 ) {
-    LocalContext.current
-    LocalUriHandler.current
-
     val selection = state.selection
     if (selection.start !in span.range.start..span.range.end) return
     if (selection.start !in 0..layoutResult.layoutInput.text.length) return
