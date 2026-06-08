@@ -4,7 +4,6 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.MessageBody
-import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.usecases.linkPreview.GetLinkPreviewInput
 import com.mangustc.mdnotes.domain.usecases.linkPreview.GetLinkPreviewUseCase
 import com.mangustc.mdnotes.domain.usecases.messenger.GetMessagesInput
@@ -71,11 +70,11 @@ class MessengerActions(
         deps.uiState.update { it.copy(messengerNewNoteText = text) }
     }
 
-    fun startEditNote(note: Note, parsedText: String) {
+    fun startEditNote(message: MessageBody) {
         deps.uiState.update {
             it.copy(
-                messengerEditingNote = note,
-                messengerNewNoteText = parsedText,
+                messengerEditingNote = message.note,
+                messengerNewNoteText = message.text,
             )
         }
     }

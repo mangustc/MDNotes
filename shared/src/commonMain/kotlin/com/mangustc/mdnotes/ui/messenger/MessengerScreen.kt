@@ -119,7 +119,6 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import coil3.annotation.ExperimentalCoilApi
 import coil3.compose.AsyncImage
-import com.mangustc.mdnotes.domain.markdown.MarkdownParser
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
@@ -258,6 +257,132 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val density = LocalDensity.current
     var inputBarHeightDp by remember { mutableStateOf(0.dp) }
 
+    val clipboard = LocalClipboard.current
+    val focusManager = LocalFocusManager.current
+
+    val actions = remember(viewModel) {
+        object : MessengerUiActions {
+            override fun onNoteSelected(message: MessageBody) {
+                viewModel.drawer.onNoteSelected(message.note)
+            }
+
+            override fun onDeleteNote(message: MessageBody) {
+                viewModel.drawer.onDeleteNote(message.note)
+            }
+
+            override fun onEditNote(message: MessageBody) {
+                viewModel.messenger.startEditNote(message)
+                attachments.clear()
+                attachments.addAll(message.attachments)
+                if (attachments.isNotEmpty()) carouselExpanded = true
+            }
+
+            override fun onCancelEdit() {
+                viewModel.messenger.cancelEditNote()
+                attachments.clear()
+                carouselExpanded = false
+            }
+
+            override fun onImageClick(images: List<DomainFile>, file: DomainFile) {
+                val index = images.indexOf(file)
+                imagePagerState = index to images
+            }
+
+            override fun onFileClick(file: DomainFile) {
+                try {
+                    FileKit.openFileWithDefaultApplication(file.file)
+                } catch (_: Exception) {
+                    viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
+                }
+            }
+
+            override fun onPinNote(message: MessageBody) {
+                viewModel.drawer.onPinNote(message.note)
+            }
+
+            override fun onToggleSelect(message: MessageBody) {
+                viewModel.messenger.toggleNoteSelection(message)
+            }
+
+            override fun onEnsurePreview(url: String) {
+                viewModel.messenger.ensureLinkPreview(url)
+            }
+
+            override val onTakePhoto =
+                if (cameraLauncher == null) null else { -> cameraLauncher.launch() }
+
+            override fun onAddImage() {
+                imagePickerLauncher.launch()
+            }
+
+            override fun onAddFile() {
+                filePickerLauncher.launch()
+            }
+
+            override fun onRemoveAttachment(index: Int) {
+                attachments.removeAt(index)
+            }
+
+            override fun onSend() {
+                val snapshot = attachments.toList()
+                attachments.clear()
+                if (uiState.messengerEditingNote != null) {
+                    viewModel.messenger.onSendNote(
+                        isEditedNote = true,
+                        attachments = snapshot,
+                    )
+                } else {
+                    viewModel.messenger.onSendNote(
+                        isEditedNote = false,
+                        attachments = snapshot,
+                        afterUpdate = {
+                            scope.launch {
+                                if (pagedNotes.itemCount != 0) listState.animateScrollToItem(
+                                    0,
+                                )
+                            }
+                        },
+                    )
+                }
+            }
+
+            override fun onCarouselExpandedClick() {
+                carouselExpanded = !carouselExpanded
+            }
+
+            override fun onDismissFullscreenCarousel() {
+                imagePagerState = null
+            }
+
+            override fun onGoToPinned(message: MessageBody) {
+                scope.launch {
+                    val indexInList =
+                        pagedNotes.itemSnapshotList.items.indexOfFirst {
+                            it.note.projectFile.relativePath == message.note.projectFile.relativePath
+                        }
+                    if (indexInList != -1) {
+                        listState.animateScrollToItem(indexInList)
+                    }
+                }
+            }
+
+            override fun copyText(text: String) {
+                scope.launch {
+                    clipboard.setClipEntry(clipEntryOf(text))
+                    focusManager.clearFocus()
+                }
+            }
+
+            override fun copyLink(text: String) {
+                scope.launch {
+                    clipboard.setClipEntry(clipEntryOf(text))
+                    viewModel.onEvent(NotificationEvent.LinkCopied)
+                    focusManager.clearFocus()
+                }
+            }
+        }
+    }
+
     if (!uiState.messengerIsLoading && uiState.project == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -278,60 +403,8 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 onValueChange = { viewModel.messenger.onNewNoteTextChanged(it) },
                 attachments = attachments,
                 isEditing = uiState.messengerEditingNote != null,
-                onCancelEdit = {
-                    viewModel.messenger.cancelEditNote()
-                    attachments.clear()
-                    carouselExpanded = false
-                },
-                onTakePhoto = if (cameraLauncher == null) null else { ->
-                    cameraLauncher.launch()
-                },
-                onAddImage = {
-                    imagePickerLauncher.launch()
-                },
-                onAddFile = { filePickerLauncher.launch() },
-                onImageClick = { clickedFileSystemPath ->
-                    val imageUris = attachments.mapNotNull {
-                        when (it.type) {
-                            Attachment.AttachmentType.IMAGE -> it.domainFile
-                            Attachment.AttachmentType.FILE -> null
-                        }
-                    }
-                    val index = imageUris.indexOf(clickedFileSystemPath)
-                    imagePagerState = index to imageUris
-                },
-                onFileClick = { uri ->
-                    try {
-                        FileKit.openFileWithDefaultApplication(uri.file)
-                    } catch (_: Exception) {
-                        viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
-                    }
-                },
-                onRemoveAttachment = { index -> attachments.removeAt(index) },
-                onSend = {
-                    val snapshot = attachments.toList()
-                    attachments.clear()
-                    if (uiState.messengerEditingNote != null) {
-                        viewModel.messenger.onSendNote(
-                            isEditedNote = true,
-                            attachments = snapshot,
-                        )
-                    } else {
-                        viewModel.messenger.onSendNote(
-                            isEditedNote = false,
-                            attachments = snapshot,
-                            afterUpdate = {
-                                scope.launch {
-                                    if (pagedNotes.itemCount != 0) listState.animateScrollToItem(
-                                        0,
-                                    )
-                                }
-                            },
-                        )
-                    }
-                },
                 carouselExpanded = carouselExpanded,
-                onCarouselExpandClick = { carouselExpanded = !carouselExpanded },
+                actions = actions,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(1f)
@@ -369,17 +442,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                         PinnedMessageBanner(
                             notes = uiState.messengerPinnedMessages,
                             currentIndex = currentPinnedInfo ?: 0,
-                            onClick = { note ->
-                                scope.launch {
-                                    val indexInList =
-                                        pagedNotes.itemSnapshotList.items.indexOfFirst {
-                                            it.note.projectFile.relativePath == note.note.projectFile.relativePath
-                                        }
-                                    if (indexInList != -1) {
-                                        listState.animateScrollToItem(indexInList)
-                                    }
-                                }
-                            },
+                            actions = actions,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .zIndex(2f)
@@ -452,32 +515,11 @@ fun MessengerScreen(viewModel: AppViewModel) {
                                     MessageBubble(
                                         message = note,
                                         linkPreviews = uiState.messengerLinkPreviews,
-                                        onEnsurePreview = { viewModel.messenger.ensureLinkPreview(it) },
-                                        onNoteSelected = { viewModel.drawer.onNoteSelected(it.note) },
-                                        onDeleteNote = { viewModel.drawer.onDeleteNote(it.note) },
-                                        onEditNote = { n, text, attach ->
-                                            viewModel.messenger.startEditNote(n.note, text)
-                                            attachments.clear()
-                                            attachments.addAll(attach)
-                                            if (attachments.isNotEmpty()) carouselExpanded = true
-                                        },
-                                        onImageClick = { idx, uris ->
-                                            imagePagerState = idx to uris
-                                        },
-                                        onPinNote = { viewModel.drawer.onPinNote(it.note) },
                                         isPinned = note.note.tags?.contains(FrontMatter.PINNED_TAG)
                                             ?: false,
                                         isSelected = uiState.messengerSelectedNotes.contains(note),
                                         isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty(),
-                                        onToggleSelect = {
-                                            viewModel.messenger.toggleNoteSelection(it)
-                                        },
-                                        onNoAppFound = {
-                                            viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
-                                        },
-                                        onLinkCopied = {
-                                            viewModel.onEvent(NotificationEvent.LinkCopied)
-                                        },
+                                        actions = actions,
                                         dateFormatter = dateFormatter,
                                     )
                                 }
@@ -493,7 +535,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
         FullScreenImageCarouselDialog(
             initialIndex = index,
             uris = uris,
-            onDismiss = { imagePagerState = null },
+            actions = actions,
         )
     }
 }
@@ -505,16 +547,8 @@ private fun MessengerInputBar(
     onValueChange: (String) -> Unit,
     attachments: List<Attachment>,
     isEditing: Boolean,
-    onCancelEdit: () -> Unit,
-    onTakePhoto: (() -> Unit)?,
-    onAddImage: () -> Unit,
-    onAddFile: () -> Unit,
-    onImageClick: (DomainFile) -> Unit,
-    onFileClick: (DomainFile) -> Unit,
-    onRemoveAttachment: (Int) -> Unit,
-    onSend: () -> Unit,
     carouselExpanded: Boolean,
-    onCarouselExpandClick: () -> Unit,
+    actions: MessengerUiActions,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -555,7 +589,7 @@ private fun MessengerInputBar(
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
-                IconButton(onClick = onCancelEdit, modifier = Modifier.size(32.dp)) {
+                IconButton(onClick = actions::onCancelEdit, modifier = Modifier.size(32.dp)) {
                     Icon(
                         Icons.Default.Close,
                         contentDescription = stringResource(Res.string.cancel_editing),
@@ -574,12 +608,7 @@ private fun MessengerInputBar(
         ) {
             AttachmentCarouselStrip(
                 attachments = attachments,
-                onTakePhoto = onTakePhoto,
-                onAddImage = onAddImage,
-                onAddFile = onAddFile,
-                onRemove = onRemoveAttachment,
-                onImageClick = onImageClick,
-                onFileClick = onFileClick,
+                actions = actions,
             )
         }
         TextField(
@@ -607,7 +636,7 @@ private fun MessengerInputBar(
             ),
             leadingIcon = {
                 TooltipIconButton(
-                    onClick = onCarouselExpandClick,
+                    onClick = actions::onCarouselExpandedClick,
                     icon = Icons.Default.AttachFile,
                     tooltip = stringResource(Res.string.attach_content),
                     shapes = IconButtonDefaults.shapes(
@@ -618,7 +647,7 @@ private fun MessengerInputBar(
             },
             trailingIcon = {
                 TooltipIconButton(
-                    onClick = onSend,
+                    onClick = actions::onSend,
                     icon = Icons.AutoMirrored.Filled.Send,
                     tooltip = if (isEditing) stringResource(Res.string.save_changes) else stringResource(
                         Res.string.create_note,
@@ -645,11 +674,10 @@ private fun MessengerInputBar(
 }
 
 @Composable
-private fun AttachmentCarouselStrip(
+private fun AttachmentCarouselStripViewing(
     modifier: Modifier = Modifier,
     attachments: List<Attachment>,
-    onImageClick: (DomainFile) -> Unit,
-    onFileClick: (DomainFile) -> Unit,
+    actions: MessengerUiActions,
 ) {
     val state = rememberCarouselState { attachments.size }
     HorizontalUncontainedCarousel(
@@ -669,11 +697,17 @@ private fun AttachmentCarouselStrip(
                 attachment = attachment,
                 onClick = when (attachment.type) {
                     Attachment.AttachmentType.IMAGE -> {
-                        { onImageClick(attachment.domainFile) }
+                        {
+                            val images = attachments.mapNotNull {
+                                if (attachment.type == Attachment.AttachmentType.FILE) return@mapNotNull null
+                                it.domainFile
+                            }
+                            actions.onImageClick(images, attachment.domainFile)
+                        }
                     }
 
                     Attachment.AttachmentType.FILE -> {
-                        { onFileClick(attachment.domainFile) }
+                        { actions.onFileClick(attachment.domainFile) }
                     }
                 },
             )
@@ -685,15 +719,10 @@ private fun AttachmentCarouselStrip(
 private fun AttachmentCarouselStrip(
     modifier: Modifier = Modifier,
     attachments: List<Attachment>,
-    onTakePhoto: (() -> Unit)?,
-    onAddImage: (() -> Unit),
-    onAddFile: (() -> Unit),
-    onRemove: ((Int) -> Unit),
-    onImageClick: (DomainFile) -> Unit,
-    onFileClick: (DomainFile) -> Unit,
+    actions: MessengerUiActions,
 ) {
-    val photoDiff = if (onTakePhoto == null) 1 else 0
-    val extraCount = 2 + if (onTakePhoto != null) 1 else 0
+    val photoDiff = if (actions.onTakePhoto == null) 1 else 0
+    val extraCount = 2 + if (actions.onTakePhoto != null) 1 else 0
     val state = rememberCarouselState { attachments.size + extraCount }
     HorizontalUncontainedCarousel(
         state = state,
@@ -716,7 +745,7 @@ private fun AttachmentCarouselStrip(
                             displayName = stringResource(Res.string.take_photo),
                         ),
                         icon = Icons.Default.PhotoCamera,
-                        onClick = onTakePhoto ?: {},
+                        onClick = actions.onTakePhoto ?: {},
                     )
                 }
 
@@ -728,7 +757,7 @@ private fun AttachmentCarouselStrip(
                             displayName = stringResource(Res.string.attach_images),
                         ),
                         icon = Icons.Default.Image,
-                        onClick = onAddImage,
+                        onClick = actions::onAddImage,
                     )
                 }
 
@@ -740,7 +769,7 @@ private fun AttachmentCarouselStrip(
                             displayName = stringResource(Res.string.attach_files),
                         ),
                         icon = Icons.Default.AttachFile,
-                        onClick = onAddFile,
+                        onClick = actions::onAddFile,
                     )
                 }
 
@@ -750,11 +779,17 @@ private fun AttachmentCarouselStrip(
                         attachment = attachment,
                         onClick = when (attachment.type) {
                             Attachment.AttachmentType.IMAGE -> {
-                                { onImageClick(attachment.domainFile) }
+                                {
+                                    val images = attachments.mapNotNull {
+                                        if (attachment.type == Attachment.AttachmentType.FILE) return@mapNotNull null
+                                        it.domainFile
+                                    }
+                                    actions.onImageClick(images, attachment.domainFile)
+                                }
                             }
 
                             Attachment.AttachmentType.FILE -> {
-                                { onFileClick(attachment.domainFile) }
+                                { actions.onFileClick(attachment.domainFile) }
                             }
                         },
                     )
@@ -766,7 +801,7 @@ private fun AttachmentCarouselStrip(
                             .fillMaxSize(),
                     ) {
                         TooltipIconButton(
-                            onClick = { onRemove(page - 3) },
+                            onClick = { actions.onRemoveAttachment(page - 3) },
                             icon = Icons.Default.Close,
                             tooltip = stringResource(Res.string.remove_attachment),
                             colors = IconButtonDefaults.iconButtonColors(
@@ -864,29 +899,18 @@ private fun AttachmentIconButton(
 private fun MessageBubble(
     message: MessageBody,
     linkPreviews: Map<String, LinkPreview?>,
-    onEnsurePreview: (String) -> Unit,
-    onNoteSelected: (MessageBody) -> Unit,
-    onDeleteNote: (MessageBody) -> Unit,
-    onEditNote: (MessageBody, String, List<Attachment>) -> Unit,
-    onImageClick: (Int, List<DomainFile>) -> Unit,
-    onPinNote: (MessageBody) -> Unit,
     isPinned: Boolean = false,
     isSelected: Boolean = false,
     isSelectionMode: Boolean = false,
-    onToggleSelect: (MessageBody) -> Unit,
-    onLinkCopied: () -> Unit,
-    onNoAppFound: () -> Unit,
     dateFormatter: DateFormatter,
+    actions: MessengerUiActions,
 ) {
     val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-    val clipboard = LocalClipboard.current
     val uriHandler = LocalUriHandler.current
-    val focusManager = LocalFocusManager.current
 
     val urls =
         remember(message.note.body) { message.links.map { it.value }.toList() }
-    LaunchedEffect(urls) { urls.forEach { onEnsurePreview(it) } }
+    LaunchedEffect(urls) { urls.forEach(actions::onEnsurePreview) }
 
     val previews = remember(urls, linkPreviews) { urls.mapNotNull { linkPreviews[it] } }
 
@@ -930,8 +954,10 @@ private fun MessageBubble(
                 }
             }
             .combinedClickable(
-                onClick = { if (isSelectionMode) onToggleSelect(message) else menuExpanded = true },
-                onLongClick = { onToggleSelect(message) },
+                onClick = {
+                    if (isSelectionMode) actions.onToggleSelect(message) else menuExpanded = true
+                },
+                onLongClick = { actions.onToggleSelect(message) },
             )
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
@@ -979,24 +1005,9 @@ private fun MessageBubble(
                         },
                     ) {
                         if (message.attachments.isNotEmpty()) {
-                            AttachmentCarouselStrip(
+                            AttachmentCarouselStripViewing(
                                 attachments = message.attachments,
-                                onImageClick = { clickedUri ->
-                                    val imageUris = message.attachments.mapNotNull {
-                                        when (it.type) {
-                                            Attachment.AttachmentType.IMAGE -> it.domainFile
-                                            else -> null
-                                        }
-                                    }
-                                    onImageClick(imageUris.indexOf(clickedUri), imageUris)
-                                },
-                                onFileClick = { uri ->
-                                    try {
-                                        FileKit.openFileWithDefaultApplication(uri.file)
-                                    } catch (_: Exception) {
-                                        onNoAppFound()
-                                    }
-                                },
+                                actions = actions,
                             )
                             if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(8.dp))
                         }
@@ -1015,7 +1026,7 @@ private fun MessageBubble(
                                         detectTapGestures(
                                             onTap = { offset ->
                                                 if (isSelectionMode) {
-                                                    onToggleSelect(message)
+                                                    actions.onToggleSelect(message)
                                                     return@detectTapGestures
                                                 }
                                                 layoutResult.value?.let { result ->
@@ -1042,15 +1053,7 @@ private fun MessageBubble(
                                                         position,
                                                     )
                                                         .firstOrNull()?.let { link ->
-                                                            scope.launch {
-                                                                clipboard.setClipEntry(
-                                                                    clipEntryOf(
-                                                                        link.item,
-                                                                    ),
-                                                                )
-                                                                onLinkCopied()
-                                                                focusManager.clearFocus()
-                                                            }
+                                                            actions.copyLink(link.item)
                                                         }
                                                 }
                                             },
@@ -1110,17 +1113,12 @@ private fun MessageBubble(
                     MenuPopupItem(
                         text = stringResource(Res.string.open), index = 0, count = 5,
                         icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                        onClick = { menuExpanded = false; onNoteSelected(message) },
+                        onClick = { menuExpanded = false; actions.onNoteSelected(message) },
                     )
                     MenuPopupItem(
                         text = stringResource(Res.string.copy), index = 1, count = 5,
                         icon = Icons.Outlined.ContentCopy,
-                        onClick = {
-                            menuExpanded = false
-                            scope.launch {
-                                clipboard.setClipEntry(clipEntryOf(message.text))
-                            }
-                        },
+                        onClick = { menuExpanded = false; actions.copyText(message.text) },
                     )
                     MenuPopupItem(
                         text = if (isPinned) stringResource(Res.string.unpin) else stringResource(
@@ -1128,26 +1126,19 @@ private fun MessageBubble(
                         ),
                         index = 2, count = 5,
                         icon = if (isPinned) Icons.Filled.PushPin else Icons.Outlined.PushPin,
-                        onClick = { menuExpanded = false; onPinNote(message) },
+                        onClick = { menuExpanded = false; actions.onPinNote(message) },
                     )
                     MenuPopupItem(
                         text = stringResource(Res.string.edit), index = 3, count = 5,
                         icon = Icons.Outlined.Edit,
-                        onClick = {
-                            menuExpanded = false
-                            onEditNote(
-                                message,
-                                message.text,
-                                message.attachments,
-                            )
-                        },
+                        onClick = { menuExpanded = false; actions.onEditNote(message) },
                     )
                     MenuPopupItem(
                         text = stringResource(Res.string.delete), index = 4, count = 5,
                         supportingText = stringResource(Res.string.cannot_be_undone),
                         icon = Icons.Outlined.Delete,
                         tint = MaterialTheme.colorScheme.error,
-                        onClick = { menuExpanded = false; onDeleteNote(message) },
+                        onClick = { menuExpanded = false; actions.onDeleteNote(message) },
                     )
                 }
             }
@@ -1159,22 +1150,14 @@ private fun MessageBubble(
 private fun PinnedMessageBanner(
     notes: List<MessageBody>,
     currentIndex: Int,
-    onClick: (MessageBody) -> Unit,
+    actions: MessengerUiActions,
     modifier: Modifier = Modifier,
 ) {
-    val currentNote = notes.getOrNull(currentIndex) ?: return
-    val attachmentString = stringResource(Res.string.attachment)
-    val displayPreview = remember(currentNote.note.body) {
-        val rawBody = currentNote.note.body ?: ""
-        val cleaned = rawBody
-            .let { MarkdownParser.stripAttachments(it, MarkdownParser.parse(it)) }
-            .lines()
-            .firstOrNull { it.isNotBlank() } ?: attachmentString
-        cleaned
-    }
+    val currentMessage = notes.getOrNull(currentIndex) ?: return
+    val displayPreview = currentMessage.text.ifBlank { stringResource(Res.string.attachment) }
 
     Surface(
-        onClick = { onClick(currentNote) },
+        onClick = { actions.onGoToPinned(currentMessage) },
         color = MaterialTheme.colorScheme.background,
         shadowElevation = 4.dp,
         shape = MaterialTheme.shapes.medium,
@@ -1217,14 +1200,14 @@ private fun PinnedMessageBanner(
 private fun FullScreenImageCarouselDialog(
     initialIndex: Int,
     uris: List<DomainFile>,
-    onDismiss: () -> Unit,
+    actions: MessengerUiActions,
 ) {
     val state = rememberCarouselState(initialItem = initialIndex) { uris.size }
     var showTopPanel by remember { mutableStateOf(true) }
     val fullscreenDialogProperties = koinInject<FullscreenDialogProperties>()
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = actions::onDismissFullscreenCarousel,
         properties = fullscreenDialogProperties.dialogProperties,
     ) {
         Box(
@@ -1259,7 +1242,7 @@ private fun FullScreenImageCarouselDialog(
                         .padding(8.dp),
                 ) {
                     TooltipIconButton(
-                        onClick = onDismiss,
+                        onClick = actions::onDismissFullscreenCarousel,
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
                         tooltip = stringResource(Res.string.go_back),
                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
