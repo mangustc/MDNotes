@@ -3,17 +3,18 @@ package com.mangustc.mdnotes.data.project
 import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.Settings
-import com.mangustc.mdnotes.domain.repositories.PlatformPathHandler
 import com.mangustc.mdnotes.domain.repositories.SettingsRepository
 import com.russhwolf.settings.Settings.Factory
 import io.github.vinceglb.filekit.PlatformFile
+import io.github.vinceglb.filekit.bookmarkData
+import io.github.vinceglb.filekit.exists
+import io.github.vinceglb.filekit.fromBookmarkData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 
 class CommonSettingsRepository(
     private val settingsFactory: Factory,
-    private val platformPathHandler: PlatformPathHandler,
 ) : SettingsRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
 
@@ -39,16 +40,26 @@ class CommonSettingsRepository(
 
     override suspend fun setProjectPath(path: DomainFile) = withContext(Dispatchers.IO) {
         val prefs = settingsFactory.create(KEY_PROJECT_URI)
-
-        platformPathHandler.takePersistablePathPermission(path)
-
-        prefs.putString(KEY_PROJECT_URI, path.path)
+        val bookmark = path.file.bookmarkData()
+        prefs.putString(KEY_PROJECT_URI, bookmark.bytes.decodeToString())
     }
 
     override suspend fun getProjectPath(): DomainFile? = withContext(Dispatchers.IO) {
         val prefs = settingsFactory.create(KEY_PROJECT_URI)
         val uriString = prefs.getStringOrNull(KEY_PROJECT_URI) ?: return@withContext null
-        DomainFile(PlatformFile(uriString))
+        try {
+            val file = PlatformFile.fromBookmarkData(uriString.toByteArray())
+
+            if (file.exists()) {
+                DomainFile(file)
+            } else {
+                prefs.remove(KEY_PROJECT_URI)
+                null
+            }
+        } catch (_: Exception) {
+            prefs.remove(KEY_PROJECT_URI)
+            null
+        }
     }
 
     companion object {
