@@ -7,11 +7,13 @@ import com.mangustc.mdnotes.data.database.NoteDao
 import com.mangustc.mdnotes.data.database.NoteDb
 import com.mangustc.mdnotes.data.database.ProjectDao
 import com.mangustc.mdnotes.data.linkPreview.CommonLinkPreviewRepository
+import com.mangustc.mdnotes.data.project.AndroidPlatformListFilesHandler
 import com.mangustc.mdnotes.data.project.AndroidPlatformPathHandler
-import com.mangustc.mdnotes.data.project.AndroidProjectRepository
+import com.mangustc.mdnotes.data.project.CommonProjectRepository
 import com.mangustc.mdnotes.data.project.CommonSettingsRepository
 import com.mangustc.mdnotes.data.sync.SyncRepositoryFactory
 import com.mangustc.mdnotes.domain.repositories.LinkPreviewRepository
+import com.mangustc.mdnotes.domain.repositories.PlatformListFilesHandler
 import com.mangustc.mdnotes.domain.repositories.PlatformPathHandler
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.repositories.SettingsRepository
@@ -63,6 +65,9 @@ private fun provideFactory(context: Context): Settings.Factory =
 private fun providePlatformPathHandler(context: Context): PlatformPathHandler =
     AndroidPlatformPathHandler(context)
 
+private fun providePlatformListFilesHandler(context: Context): PlatformListFilesHandler =
+    AndroidPlatformListFilesHandler(context)
+
 
 actual val dataModule: Module
     get() = module {
@@ -73,8 +78,9 @@ actual val dataModule: Module
         single { create(::provideHttpClient) }
         single { create(::provideFactory) }
         single { create(::providePlatformPathHandler) }
+        single { create(::providePlatformListFilesHandler) }
 
-        single<AndroidProjectRepository>() bind ProjectRepository::class
+        single<CommonProjectRepository>() bind ProjectRepository::class
         single<CommonSettingsRepository>() bind SettingsRepository::class
         single<CommonLinkPreviewRepository>() bind LinkPreviewRepository::class
         single<SyncRepositoryFactory>()

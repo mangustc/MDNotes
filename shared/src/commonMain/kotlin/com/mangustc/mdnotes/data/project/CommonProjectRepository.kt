@@ -1,7 +1,5 @@
 package com.mangustc.mdnotes.data.project
 
-import android.content.Context
-import androidx.documentfile.provider.DocumentFile
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
@@ -21,11 +19,10 @@ import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.ProjectFile
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SearchQuery
+import com.mangustc.mdnotes.domain.repositories.PlatformListFilesHandler
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
-import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.createDirectories
 import io.github.vinceglb.filekit.delete
-import io.github.vinceglb.filekit.dialogs.toAndroidUri
 import io.github.vinceglb.filekit.div
 import io.github.vinceglb.filekit.exists
 import io.github.vinceglb.filekit.extension
@@ -42,10 +39,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
-class AndroidProjectRepository(
-    private val context: Context,
+class CommonProjectRepository(
     private val noteDao: NoteDao,
     private val projectDao: ProjectDao,
+    private val platformListFilesHandler: PlatformListFilesHandler,
 ) : ProjectRepository {
     override suspend fun getNotes(
         project: Project,
@@ -117,38 +114,35 @@ class AndroidProjectRepository(
         val projectId = getOrCreateProjectId(project)
             ?: throw ProjectAccessException(project.notesRelativePath.value)
 
-        val notesDir =
-            DocumentFile.fromTreeUri(
-                context,
-                getFile(project, project.notesRelativePath).file.toAndroidUri(),
-            )
-                ?: throw ProjectAccessException(project.notesRelativePath.value)
         val files =
-            notesDir.listFiles().filter { it.name?.endsWith(".md") == true }
+            platformListFilesHandler.getDirectoryFiles(project.rootDomainFile / project.notesRelativePath)
+                ?.filter { it.extension == "md" }
+                ?: throw ProjectAccessException(project.notesRelativePath.value)
 
         val existingNotes = noteDao.searchNotes(SearchQuery().buildRoomRawQuery(project))
         val existingUris = existingNotes.associateBy { it.uri }
 
         files.forEach { file ->
-            val uriStr = file.uri.toString()
+            val uriStr = file.path
             val cached = existingUris[uriStr]
 
-            if (cached == null || file.lastModified() > cached.lastModified) {
+            if (cached == null || file.file.lastModified()
+                    .toEpochMilliseconds() > cached.lastModified
+            ) {
                 val fullText = try {
-                    PlatformFile(file.uri).readString()
+                    file.file.readString()
                 } catch (e: Exception) {
-                    throw FileNotReadableException(file.name ?: "", e)
+                    throw FileNotReadableException(file.name, e)
                 }
                 val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
                 val tags = frontMatter.toTagString()
-                val name = file.name?.removeSuffix(".md")
-                    ?: throw FileNotReadableException(uriStr)
+                val name = file.nameWithoutExtension
 
                 val entity = NoteEntity(
                     id = cached?.id ?: 0,
                     uri = uriStr,
                     name = name,
-                    lastModified = file.lastModified(),
+                    lastModified = file.file.lastModified().toEpochMilliseconds(),
                     createdAt = frontMatter.toCreatedAtMillis(),
                     tags = tags,
                     body = body,
@@ -158,7 +152,7 @@ class AndroidProjectRepository(
             }
         }
 
-        val currentFileUris = files.map { it.uri.toString() }.toSet()
+        val currentFileUris = files.map { it.path }.toSet()
         existingNotes.forEach { cached ->
             if (cached.uri !in currentFileUris) noteDao.deleteByUri(cached.uri)
         }
@@ -332,13 +326,8 @@ class AndroidProjectRepository(
     override suspend fun getProjectFilesList(
         project: Project,
     ): List<ProjectFile> = withContext(Dispatchers.IO) {
-        val rootUri = project.rootDomainFile.file.toAndroidUri()
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
+        platformListFilesHandler.getAllProjectFiles(project)
             ?: throw ProjectAccessException(project.rootDomainFile.name)
-
-        val result = mutableListOf<ProjectFile>()
-        walkDocumentTree(rootDoc, RelativePath(""), result)
-        result.toList()
     }
 
     override suspend fun getProjectFile(
@@ -367,26 +356,6 @@ class AndroidProjectRepository(
         return projectDao.getProjectId(rootPath)
     }
 
-    private fun walkDocumentTree(
-        dir: DocumentFile,
-        prefix: RelativePath,
-        out: MutableList<ProjectFile>,
-    ) {
-        dir.listFiles().forEach { file ->
-            val name = file.name ?: return@forEach
-            val relPath = prefix.resolve(RelativePath(name))
-            if (file.isDirectory) {
-                walkDocumentTree(file, relPath, out)
-            } else {
-                out.add(
-                    ProjectFile(
-                        domainFile = DomainFile(PlatformFile(file.uri.toString())),
-                        relativePath = relPath,
-                    ),
-                )
-            }
-        }
-    }
 
     private fun getFile(project: Project, relativePath: RelativePath): DomainFile {
         val domainFile = project.rootDomainFile / relativePath
