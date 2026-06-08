@@ -1,7 +1,7 @@
 package com.mangustc.mdnotes.koin.modules
 
-import com.mangustc.mdnotes.ui.settings.AndroidFullscreenDialogProperties
 import com.mangustc.mdnotes.ui.util.AndroidDateFormatter
+import com.mangustc.mdnotes.ui.util.AndroidFullscreenDialogProperties
 import com.mangustc.mdnotes.ui.util.AndroidRememberCameraLauncher
 import com.mangustc.mdnotes.ui.util.DateFormatter
 import com.mangustc.mdnotes.ui.util.FullscreenDialogProperties
