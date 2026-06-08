@@ -26,7 +26,7 @@ class GetRealSpanInfoLinkTypeUseCase(
                 )
                 val isNote =
                     linkType == SpanInfo.Link.LinkType.NOTE &&
-                            projectFile.relativePath.dirRelativePath == input.project.notesRelativePath
+                            projectFile.relativePath.parent == input.project.notesRelativePath
 
                 return if (isNote) {
                     SpanInfo.Link.LinkType.NOTE

@@ -113,7 +113,7 @@ class YandexSyncRepository(
     }
 
     private suspend fun ensureDirectories(relativePath: RelativePath) {
-        val parts = relativePath.dirRelativePath.splitParts()
+        val parts = relativePath.parent.splitParts()
         var current = appFolder
         parts.forEach { segment ->
             current += "/$segment"

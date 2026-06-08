@@ -234,7 +234,7 @@ class AndroidProjectRepository(
                     ProjectRepository.FileExistsStrategy.AUTO_RENAME -> {
                         val name = file.nameWithoutExtension
                         val extension = file.extension
-                        val parent = (project.rootDomainFile / relativePath.dirRelativePath).file
+                        val parent = (project.rootDomainFile / relativePath.parent).file
                         for (i in 1..MAX_RENAME_TRIES) {
                             val newFile = parent / "$name - $i.$extension"
                             if (!newFile.exists()) return@let newFile
@@ -245,7 +245,7 @@ class AndroidProjectRepository(
             } else {
                 if (createParents) {
                     try {
-                        val parent = (project.rootDomainFile / relativePath.dirRelativePath).file
+                        val parent = (project.rootDomainFile / relativePath.parent).file
                         parent.let {
                             if (!it.exists()) it.createDirectories()
                         }
@@ -265,7 +265,7 @@ class AndroidProjectRepository(
 
         ProjectFile(
             domainFile = DomainFile(file),
-            relativePath = relativePath.dirRelativePath.resolve(RelativePath(file.name)),
+            relativePath = relativePath.parent.resolve(RelativePath(file.name)),
         )
     }
 

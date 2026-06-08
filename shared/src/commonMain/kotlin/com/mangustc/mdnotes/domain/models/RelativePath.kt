@@ -27,8 +27,10 @@ value class RelativePath(val value: String) {
 
     val basename: String get() = splitParts().last()
 
-    val dirRelativePath: RelativePath
+    val parent: RelativePath
         get() = RelativePath(
             value = splitParts().dropLast(1).joinToString("/"),
         )
 }
+
+fun String.toRelativePath() = RelativePath(this)
