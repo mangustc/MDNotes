@@ -2,8 +2,6 @@ package com.mangustc.mdnotes.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandHorizontally
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -64,14 +62,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
@@ -127,7 +121,9 @@ import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+fun AppScaffold(
+    appViewModel: AppViewModel,
+) = BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val isLargeScreen = maxWidth > 840.dp
 
     val navController = rememberNavController()
@@ -165,9 +161,11 @@ fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modi
                 is NavigationEvent.OpenDrawer -> {
                     drawerState.open()
                 }
+
                 is NavigationEvent.CloseDrawer -> {
                     drawerState.close()
                 }
+
                 is NavigationEvent.OpenUrl -> uriHandler.openUri(it.url)
                 is NavigationEvent.OpenFile -> {
                     FileKit.openFileWithDefaultApplication(it.uri.file)
@@ -495,7 +493,10 @@ fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modi
                 ) {
                     composable<EditorDestination> { backStackEntry ->
                         val data: EditorDestination = backStackEntry.toRoute()
-                        EditorScreen(viewModel = appViewModel, noteRelativePath = data.noteRelativePath)
+                        EditorScreen(
+                            viewModel = appViewModel,
+                            noteRelativePath = data.noteRelativePath,
+                        )
                     }
                     composable<MessengerDestination> {
                         MessengerScreen(viewModel = appViewModel)
@@ -520,7 +521,7 @@ fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modi
                 exit = shrinkHorizontally(
                     animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
                     shrinkTowards = Alignment.Start,
-                )
+                ),
             ) {
                 PermanentDrawerSheet(
                     modifier = Modifier.imePadding(),
@@ -542,7 +543,7 @@ fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modi
                     drawerSheetContent()
                 }
             },
-            modifier = Modifier.background(MaterialTheme.colorScheme.background)
+            modifier = Modifier.background(MaterialTheme.colorScheme.background),
         ) {
             scaffoldContent()
         }
