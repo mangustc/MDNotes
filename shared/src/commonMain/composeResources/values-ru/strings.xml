@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">markdown-editor</string>
+    <string name="app_name">MDNotes</string>
     <string name="remove_attachment">Удалить вложение</string>
     <string name="image">Изображение</string>
     <string name="file">Файл</string>

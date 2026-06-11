@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">markdown-editor</string>
+    <string name="app_name">MDNotes</string>
     <string name="remove_attachment">Remove attachment</string>
     <string name="image">Image</string>
     <string name="file">File</string>
