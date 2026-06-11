@@ -79,7 +79,6 @@ class DrawerActions(
     }
 
     fun onNoteSelected(note: Note) {
-        deps.globalActions.onEvent(NavigationEvent.CloseDrawer)
         deps.globalActions.onEvent(NavigationEvent.GoToEditor(note = note))
     }
 
@@ -110,7 +109,6 @@ class DrawerActions(
             }.getOrElse { return@launch }
             deps.globalActions.updateNoteLists()
             deps.globalActions.onEvent(NavigationEvent.GoToEditor(note))
-            deps.globalActions.onEvent(NavigationEvent.CloseDrawer)
         }
     }
 

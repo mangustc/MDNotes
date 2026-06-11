@@ -1,8 +1,15 @@
 package com.mangustc.mdnotes.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -55,10 +63,15 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
@@ -114,9 +127,9 @@ import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun AppScaffold(
-    appViewModel: AppViewModel,
-) {
+fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val isLargeScreen = maxWidth > 840.dp
+
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -132,15 +145,29 @@ fun AppScaffold(
     val focusManager = LocalFocusManager.current
     val uriHandler = LocalUriHandler.current
 
+    LaunchedEffect(isLargeScreen) {
+        if (isLargeScreen) {
+            drawerState.open()
+        } else {
+            drawerState.close()
+        }
+    }
+
     LaunchedEffect(Unit) {
         appViewModel.navigationEvents.collect {
             when (it) {
-                is NavigationEvent.GoToEditor ->
+                is NavigationEvent.GoToEditor -> {
+                    if (!isLargeScreen) drawerState.close()
                     navController.navigate(EditorDestination(it.note.projectFile.relativePath.value))
+                }
 
                 is NavigationEvent.GoBack -> navController.popBackStack()
-                is NavigationEvent.OpenDrawer -> drawerState.open()
-                is NavigationEvent.CloseDrawer -> drawerState.close()
+                is NavigationEvent.OpenDrawer -> {
+                    drawerState.open()
+                }
+                is NavigationEvent.CloseDrawer -> {
+                    drawerState.close()
+                }
                 is NavigationEvent.OpenUrl -> uriHandler.openUri(it.url)
                 is NavigationEvent.OpenFile -> {
                     FileKit.openFileWithDefaultApplication(it.uri.file)
@@ -167,7 +194,6 @@ fun AppScaffold(
         }
     }
 
-
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
@@ -183,300 +209,341 @@ fun AppScaffold(
 
     val searchResults = appViewModel.drawer.searchResultsPaged.collectAsLazyPagingItems()
 
-    val isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty()
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            ModalDrawerSheet(
-                modifier = Modifier.imePadding(),
-            ) {
-                val reverseLayout = uiState.settings?.reverseLayout ?: false
-                val projectComponent = @Composable {
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                    ) {
-                        SplitButtonLayout(
-                            leadingButton = {
-                                val projectName = uiState.project?.name
-                                    ?: stringResource(Res.string.select_project_folder)
-                                TooltipBox(
-                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                        TooltipAnchorPosition.Below,
-                                    ),
-                                    tooltip = { PlainTooltip { Text(projectName) } },
-                                    state = rememberTooltipState(),
-                                ) {
-                                    val content = @Composable {
-                                        Icon(
-                                            Icons.Default.FolderOpen,
-                                            modifier = Modifier.size(SplitButtonDefaults.LeadingIconSize),
-                                            contentDescription = projectName,
-                                        )
-                                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                                        Text(projectName)
-                                    }
-                                    if (uiState.project != null) {
-                                        SplitButtonDefaults.TonalLeadingButton(
-                                            onClick = { folderPicker.launch() },
-                                        ) { content() }
-                                    } else {
-                                        Button(
-                                            onClick = { folderPicker.launch() },
-                                            shapes = ButtonDefaults.shapes(),
-                                        ) { content() }
-                                    }
-                                }
-                            },
-                            trailingButton = {
-                                if (uiState.project != null) {
-                                    TooltipBox(
-                                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                            TooltipAnchorPosition.Below,
-                                        ),
-                                        tooltip = { PlainTooltip { Text(stringResource(Res.string.settings)) } },
-                                        state = rememberTooltipState(),
-                                    ) {
-                                        SplitButtonDefaults.TonalTrailingButton(
-                                            checked = false,
-                                            onCheckedChange = {
-                                                appViewModel.settings.showSettings()
-                                            },
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Settings,
-                                                modifier = Modifier.size(SplitButtonDefaults.TrailingIconSize),
-                                                contentDescription = stringResource(Res.string.settings),
-                                            )
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                        if (uiState.project != null) {
+    val drawerSheetContent = remember {
+        movableContentOf {
+            val reverseLayout = uiState.settings?.reverseLayout ?: false
+            val projectComponent = @Composable {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                ) {
+                    SplitButtonLayout(
+                        leadingButton = {
+                            val projectName = uiState.project?.name
+                                ?: stringResource(Res.string.select_project_folder)
                             TooltipBox(
                                 positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
                                     TooltipAnchorPosition.Below,
                                 ),
-                                tooltip = { PlainTooltip { Text(stringResource(Res.string.synchronization)) } },
+                                tooltip = { PlainTooltip { Text(projectName) } },
                                 state = rememberTooltipState(),
                             ) {
-                                OutlinedIconButton(
-                                    onClick = {
-                                        appViewModel.project.syncNow()
-                                    },
-                                    border = BorderStroke(
-                                        width = IconButtonDefaults.outlinedIconButtonBorder(true).width,
-                                        color = MaterialTheme.colorScheme.outlineVariant,
+                                val content = @Composable {
+                                    Icon(
+                                        Icons.Default.FolderOpen,
+                                        modifier = Modifier.size(SplitButtonDefaults.LeadingIconSize),
+                                        contentDescription = projectName,
+                                    )
+                                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                                    Text(projectName)
+                                }
+                                if (uiState.project != null) {
+                                    SplitButtonDefaults.TonalLeadingButton(
+                                        onClick = { folderPicker.launch() },
+                                    ) { content() }
+                                } else {
+                                    Button(
+                                        onClick = { folderPicker.launch() },
+                                        shapes = ButtonDefaults.shapes(),
+                                    ) { content() }
+                                }
+                            }
+                        },
+                        trailingButton = {
+                            if (uiState.project != null) {
+                                TooltipBox(
+                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                        TooltipAnchorPosition.Below,
                                     ),
-                                    shapes = IconButtonDefaults.shapes(
-                                        shape = IconButtonDefaults.mediumSquareShape,
-                                    ),
-                                    modifier = Modifier.size(
-                                        IconButtonDefaults.mediumContainerSize(),
-                                    ),
+                                    tooltip = { PlainTooltip { Text(stringResource(Res.string.settings)) } },
+                                    state = rememberTooltipState(),
                                 ) {
-                                    if (uiState.isSyncInProgress) {
-                                        LoadingIndicator()
-                                    } else {
+                                    SplitButtonDefaults.TonalTrailingButton(
+                                        checked = false,
+                                        onCheckedChange = {
+                                            appViewModel.settings.showSettings()
+                                        },
+                                    ) {
                                         Icon(
-                                            Icons.Default.Sync,
-                                            contentDescription = stringResource(Res.string.synchronization),
+                                            Icons.Default.Settings,
+                                            modifier = Modifier.size(SplitButtonDefaults.TrailingIconSize),
+                                            contentDescription = stringResource(Res.string.settings),
                                         )
                                     }
+                                }
+                            }
+                        },
+                    )
+                    if (uiState.project != null) {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                TooltipAnchorPosition.Below,
+                            ),
+                            tooltip = { PlainTooltip { Text(stringResource(Res.string.synchronization)) } },
+                            state = rememberTooltipState(),
+                        ) {
+                            OutlinedIconButton(
+                                onClick = {
+                                    appViewModel.project.syncNow()
+                                },
+                                border = BorderStroke(
+                                    width = IconButtonDefaults.outlinedIconButtonBorder(true).width,
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                ),
+                                shapes = IconButtonDefaults.shapes(
+                                    shape = IconButtonDefaults.mediumSquareShape,
+                                ),
+                                modifier = Modifier.size(
+                                    IconButtonDefaults.mediumContainerSize(),
+                                ),
+                            ) {
+                                if (uiState.isSyncInProgress) {
+                                    LoadingIndicator()
+                                } else {
+                                    Icon(
+                                        Icons.Default.Sync,
+                                        contentDescription = stringResource(Res.string.synchronization),
+                                    )
                                 }
                             }
                         }
                     }
                 }
-                val searchComponent = @Composable {
-                    if (uiState.project != null) {
-                        NoteSearchBar(
-                            searchState = appViewModel.drawer.searchState,
-                            searchResults = searchResults,
-                            onSearchEvent = appViewModel.drawer::onSearchEvent,
-                            reverseLayout = reverseLayout,
-                            paddingValues = PaddingValues(horizontal = 16.dp),
-                        ) { note ->
-                            NoteDrawerItem(
-                                name = note.name,
-                                supportingText = note.tags?.filter { it != FrontMatter.PINNED_TAG }
-                                    ?.let {
-                                        if (it.isEmpty()) return@let null
-                                        it.joinToString(", ")
-                                    },
-                                isPinned = note.tags?.contains(FrontMatter.PINNED_TAG) == true,
-                                selected = note.projectFile.relativePath == uiState.activeNote?.projectFile?.relativePath,
-                                onClick = { appViewModel.drawer.onNoteSelected(note); focusManager.clearFocus() },
-                                onOpen = { appViewModel.drawer.onNoteSelected(note) },
-                                onDelete = { appViewModel.drawer.showNoteDeleteDialog(note) },
-                                onRename = { appViewModel.drawer.showNoteRenameDialog(note) },
-                                onShowInfo = { appViewModel.drawer.showNoteShowInfoDialog(note) },
-                                onPin = { appViewModel.drawer.onPinNote(note) },
-                            )
-                        }
-                    } else {
-                        Column(
-                            verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.fillMaxSize(),
-                        ) {
-                            Text(
-                                stringResource(Res.string.open_a_project_folder_to_see_notes),
-                                style = MaterialTheme.typography.bodyMedium,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                            )
-                        }
+            }
+            val searchComponent = @Composable {
+                if (uiState.project != null) {
+                    NoteSearchBar(
+                        searchState = appViewModel.drawer.searchState,
+                        searchResults = searchResults,
+                        onSearchEvent = appViewModel.drawer::onSearchEvent,
+                        reverseLayout = reverseLayout,
+                        paddingValues = PaddingValues(horizontal = 16.dp),
+                    ) { note ->
+                        NoteDrawerItem(
+                            name = note.name,
+                            supportingText = note.tags?.filter { it != FrontMatter.PINNED_TAG }
+                                ?.let {
+                                    if (it.isEmpty()) return@let null
+                                    it.joinToString(", ")
+                                },
+                            isPinned = note.tags?.contains(FrontMatter.PINNED_TAG) == true,
+                            selected = note.projectFile.relativePath == uiState.activeNote?.projectFile?.relativePath,
+                            onClick = { appViewModel.drawer.onNoteSelected(note); focusManager.clearFocus() },
+                            onOpen = { appViewModel.drawer.onNoteSelected(note) },
+                            onDelete = { appViewModel.drawer.showNoteDeleteDialog(note) },
+                            onRename = { appViewModel.drawer.showNoteRenameDialog(note) },
+                            onShowInfo = { appViewModel.drawer.showNoteShowInfoDialog(note) },
+                            onPin = { appViewModel.drawer.onPinNote(note) },
+                        )
                     }
-                }
-                val createNoteComponent = @Composable {
-                    if (uiState.project != null) {
-                        FilledTonalButton(
-                            onClick = { appViewModel.drawer.showCreateNoteDialog() },
+                } else {
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Text(
+                            stringResource(Res.string.open_a_project_folder_to_see_notes),
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
-                                .padding(horizontal = 16.dp)
-                                .fillMaxWidth(),
-                        ) {
-                            Icon(
-                                Icons.Default.Create,
-                                contentDescription = stringResource(Res.string.create_new_note),
-                            )
-                            Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                            Text(text = stringResource(Res.string.create_new_note))
-                        }
-                    }
-                }
-
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(vertical = 8.dp),
-                ) {
-                    if (reverseLayout) {
-                        projectComponent()
-                        createNoteComponent()
-                        HorizontalDivider()
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.BottomStart,
-                        ) {
-                            searchComponent()
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.TopStart,
-                        ) {
-                            searchComponent()
-                        }
-                        HorizontalDivider()
-                        createNoteComponent()
-                        projectComponent()
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        )
                     }
                 }
             }
-        },
-    ) {
-        Scaffold(
-            snackbarHost = {
-                SnackbarHost(hostState = snackbarHostState)
-            },
-            topBar = {
-                TopAppBar(
-                    title = {
-                        if (isSelectionMode) {
-                            Text("${uiState.messengerSelectedNotes.size}")
-                        } else {
-                            Text(
-                                if (navBackStackEntry?.destination?.route == MessengerDestination::class.qualifiedName) stringResource(
-                                    Res.string.quick_notes,
-                                ) else uiState.activeNote?.name
-                                    ?: stringResource(Res.string.app_name),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        if (isSelectionMode) {
-                            TooltipIconButton(
-                                onClick = { appViewModel.messenger.clearSelection() },
-                                icon = Icons.Default.Close,
-                                tooltip = stringResource(Res.string.clear_selection),
-                                tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                            )
-                        } else if (navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName) {
-                            TooltipIconButton(
-                                onClick = { appViewModel.editor.onCloseEditor() },
-                                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                                tooltip = stringResource(Res.string.go_back),
-                                tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                            )
-                        } else {
-                            TooltipIconButton(
-                                onClick = {
-                                    appViewModel.onEvent(NavigationEvent.OpenDrawer)
-                                },
-                                icon = Icons.Default.Menu,
-                                tooltip = stringResource(Res.string.open_menu),
-                                tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                            )
-                        }
-                    },
-                    actions = {
-                        if (isSelectionMode) {
-                            TooltipIconButton(
-                                onClick = {
-                                    appViewModel.messenger.copySelectedNotesText()
-                                },
-                                icon = Icons.Outlined.ContentCopy,
-                                tooltip = stringResource(Res.string.copy_selected),
-                                tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                            )
-                            TooltipIconButton(
-                                onClick = { appViewModel.messenger.deleteSelectedNotes() },
-                                icon = Icons.Outlined.Delete,
-                                tooltip = stringResource(Res.string.delete_selected),
-                                tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                            )
-                        }
+            val createNoteComponent = @Composable {
+                if (uiState.project != null) {
+                    FilledTonalButton(
+                        onClick = { appViewModel.drawer.showCreateNoteDialog() },
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .fillMaxWidth(),
+                    ) {
+                        Icon(
+                            Icons.Default.Create,
+                            contentDescription = stringResource(Res.string.create_new_note),
+                        )
+                        Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(text = stringResource(Res.string.create_new_note))
+                    }
+                }
+            }
 
-                        if (!isSelectionMode &&
-                            navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName
-                        ) {
-                            if (!uiState.isViewingMode) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(vertical = 8.dp),
+            ) {
+                if (reverseLayout) {
+                    projectComponent()
+                    createNoteComponent()
+                    HorizontalDivider()
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.BottomStart,
+                    ) {
+                        searchComponent()
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.TopStart,
+                    ) {
+                        searchComponent()
+                    }
+                    HorizontalDivider()
+                    createNoteComponent()
+                    projectComponent()
+                }
+            }
+        }
+    }
+
+    val scaffoldContent = remember {
+        movableContentOf {
+            val isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty()
+
+            Scaffold(
+                snackbarHost = {
+                    SnackbarHost(hostState = snackbarHostState)
+                },
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            if (isSelectionMode) {
+                                Text("${uiState.messengerSelectedNotes.size}")
+                            } else {
+                                Text(
+                                    if (navBackStackEntry?.destination?.route == MessengerDestination::class.qualifiedName) stringResource(
+                                        Res.string.quick_notes,
+                                    ) else uiState.activeNote?.name
+                                        ?: stringResource(Res.string.app_name),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        },
+                        navigationIcon = {
+                            if (isSelectionMode) {
                                 TooltipIconButton(
-                                    onClick = { appViewModel.editor.toggleViewingMode() },
-                                    icon = Icons.Default.Visibility,
-                                    tooltip = stringResource(Res.string.read_editor),
+                                    onClick = { appViewModel.messenger.clearSelection() },
+                                    icon = Icons.Default.Close,
+                                    tooltip = stringResource(Res.string.clear_selection),
+                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                )
+                            } else if (navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName) {
+                                TooltipIconButton(
+                                    onClick = { appViewModel.editor.onCloseEditor() },
+                                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                    tooltip = stringResource(Res.string.go_back),
+                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                )
+                            } else {
+                                TooltipIconButton(
+                                    onClick = {
+                                        appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                                    },
+                                    icon = Icons.Default.Menu,
+                                    tooltip = stringResource(Res.string.open_menu),
                                     tooltipAnchorPosition = TooltipAnchorPosition.Below,
                                 )
                             }
-                        }
-                    },
-                )
-            },
-        ) { innerPadding ->
-            NavHost(
-                navController = navController,
-                startDestination = MessengerDestination,
-                modifier = Modifier.padding(innerPadding),
-            ) {
-                composable<EditorDestination> { backStackEntry ->
-                    val data: EditorDestination = backStackEntry.toRoute()
-                    EditorScreen(viewModel = appViewModel, noteRelativePath = data.noteRelativePath)
-                }
-                composable<MessengerDestination> {
-                    MessengerScreen(viewModel = appViewModel)
+                        },
+                        actions = {
+                            if (isSelectionMode) {
+                                TooltipIconButton(
+                                    onClick = {
+                                        appViewModel.messenger.copySelectedNotesText()
+                                    },
+                                    icon = Icons.Outlined.ContentCopy,
+                                    tooltip = stringResource(Res.string.copy_selected),
+                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                )
+                                TooltipIconButton(
+                                    onClick = { appViewModel.messenger.deleteSelectedNotes() },
+                                    icon = Icons.Outlined.Delete,
+                                    tooltip = stringResource(Res.string.delete_selected),
+                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                )
+                            }
+
+                            if (!isSelectionMode &&
+                                navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName
+                            ) {
+                                if (!uiState.isViewingMode) {
+                                    TooltipIconButton(
+                                        onClick = { appViewModel.editor.toggleViewingMode() },
+                                        icon = Icons.Default.Visibility,
+                                        tooltip = stringResource(Res.string.read_editor),
+                                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                    )
+                                }
+                            }
+                        },
+                    )
+                },
+            ) { innerPadding ->
+                NavHost(
+                    navController = navController,
+                    startDestination = MessengerDestination,
+                    modifier = Modifier.padding(innerPadding),
+                ) {
+                    composable<EditorDestination> { backStackEntry ->
+                        val data: EditorDestination = backStackEntry.toRoute()
+                        EditorScreen(viewModel = appViewModel, noteRelativePath = data.noteRelativePath)
+                    }
+                    composable<MessengerDestination> {
+                        MessengerScreen(viewModel = appViewModel)
+                    }
                 }
             }
+        }
+    }
+
+    if (isLargeScreen) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            AnimatedVisibility(
+                visible = drawerState.targetValue == DrawerValue.Open,
+                enter = expandHorizontally(
+                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                    expandFrom = Alignment.Start,
+                ),
+                exit = shrinkHorizontally(
+                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                    shrinkTowards = Alignment.Start,
+                )
+            ) {
+                PermanentDrawerSheet(
+                    modifier = Modifier.imePadding(),
+                ) {
+                    drawerSheetContent()
+                }
+            }
+            Box(modifier = Modifier.weight(1f)) {
+                scaffoldContent()
+            }
+        }
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    modifier = Modifier.imePadding(),
+                ) {
+                    drawerSheetContent()
+                }
+            }
+        ) {
+            scaffoldContent()
         }
     }
 
@@ -529,4 +596,3 @@ fun AppScaffold(
         )
     }
 }
-
