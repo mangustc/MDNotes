@@ -541,7 +541,8 @@ fun AppScaffold(appViewModel: AppViewModel) = BoxWithConstraints(modifier = Modi
                 ) {
                     drawerSheetContent()
                 }
-            }
+            },
+            modifier = Modifier.background(MaterialTheme.colorScheme.background)
         ) {
             scaffoldContent()
         }
