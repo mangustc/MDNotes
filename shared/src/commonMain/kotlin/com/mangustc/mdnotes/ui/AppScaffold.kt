@@ -398,7 +398,7 @@ fun AppScaffold(
     }
 
     val scaffoldContent = remember {
-        movableContentOf {
+        movableContentOf<Boolean> { isLarge ->
             val isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty()
 
             Scaffold(
@@ -406,79 +406,80 @@ fun AppScaffold(
                     SnackbarHost(hostState = snackbarHostState)
                 },
                 topBar = {
-                    TopAppBar(
-                        title = {
-                            if (isSelectionMode) {
-                                Text("${uiState.messengerSelectedNotes.size}")
-                            } else {
-                                Text(
-                                    if (navBackStackEntry?.destination?.route == MessengerDestination::class.qualifiedName) stringResource(
-                                        Res.string.quick_notes,
-                                    ) else uiState.activeNote?.name
-                                        ?: stringResource(Res.string.app_name),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        },
-                        navigationIcon = {
-                            if (isSelectionMode) {
-                                TooltipIconButton(
-                                    onClick = { appViewModel.messenger.clearSelection() },
-                                    icon = Icons.Default.Close,
-                                    tooltip = stringResource(Res.string.clear_selection),
-                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                                )
-                            } else if (navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName) {
-                                TooltipIconButton(
-                                    onClick = { appViewModel.editor.onCloseEditor() },
-                                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                                    tooltip = stringResource(Res.string.go_back),
-                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                                )
-                            } else {
-                                TooltipIconButton(
-                                    onClick = {
-                                        appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
-                                    },
-                                    icon = Icons.Default.Menu,
-                                    tooltip = stringResource(Res.string.open_menu),
-                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                                )
-                            }
-                        },
-                        actions = {
-                            if (isSelectionMode) {
-                                TooltipIconButton(
-                                    onClick = {
-                                        appViewModel.messenger.copySelectedNotesText()
-                                    },
-                                    icon = Icons.Outlined.ContentCopy,
-                                    tooltip = stringResource(Res.string.copy_selected),
-                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                                )
-                                TooltipIconButton(
-                                    onClick = { appViewModel.messenger.deleteSelectedNotes() },
-                                    icon = Icons.Outlined.Delete,
-                                    tooltip = stringResource(Res.string.delete_selected),
-                                    tooltipAnchorPosition = TooltipAnchorPosition.Below,
-                                )
-                            }
-
-                            if (!isSelectionMode &&
-                                navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName
-                            ) {
-                                if (!uiState.isViewingMode) {
+                    if (!isLarge || navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName)
+                        TopAppBar(
+                            title = {
+                                if (isSelectionMode) {
+                                    Text("${uiState.messengerSelectedNotes.size}")
+                                } else {
+                                    Text(
+                                        if (navBackStackEntry?.destination?.route == MessengerDestination::class.qualifiedName) stringResource(
+                                            Res.string.quick_notes,
+                                        ) else uiState.activeNote?.name
+                                            ?: stringResource(Res.string.app_name),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            },
+                            navigationIcon = {
+                                if (isSelectionMode) {
                                     TooltipIconButton(
-                                        onClick = { appViewModel.editor.toggleViewingMode() },
-                                        icon = Icons.Default.Visibility,
-                                        tooltip = stringResource(Res.string.read_editor),
+                                        onClick = { appViewModel.messenger.clearSelection() },
+                                        icon = Icons.Default.Close,
+                                        tooltip = stringResource(Res.string.clear_selection),
+                                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                    )
+                                } else if (navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName) {
+                                    TooltipIconButton(
+                                        onClick = { appViewModel.editor.onCloseEditor() },
+                                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                        tooltip = stringResource(Res.string.go_back),
+                                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                    )
+                                } else {
+                                    TooltipIconButton(
+                                        onClick = {
+                                            appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                                        },
+                                        icon = Icons.Default.Menu,
+                                        tooltip = stringResource(Res.string.open_menu),
                                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
                                     )
                                 }
-                            }
-                        },
-                    )
+                            },
+                            actions = {
+                                if (isSelectionMode) {
+                                    TooltipIconButton(
+                                        onClick = {
+                                            appViewModel.messenger.copySelectedNotesText()
+                                        },
+                                        icon = Icons.Outlined.ContentCopy,
+                                        tooltip = stringResource(Res.string.copy_selected),
+                                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                    )
+                                    TooltipIconButton(
+                                        onClick = { appViewModel.messenger.deleteSelectedNotes() },
+                                        icon = Icons.Outlined.Delete,
+                                        tooltip = stringResource(Res.string.delete_selected),
+                                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                    )
+                                }
+
+                                if (!isSelectionMode &&
+                                    navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName
+                                ) {
+                                    if (!uiState.isViewingMode) {
+                                        TooltipIconButton(
+                                            onClick = { appViewModel.editor.toggleViewingMode() },
+                                            icon = Icons.Default.Visibility,
+                                            tooltip = stringResource(Res.string.read_editor),
+                                            tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                                        )
+                                    }
+                                }
+                            },
+                        )
                 },
             ) { innerPadding ->
                 NavHost(
@@ -502,30 +503,45 @@ fun AppScaffold(
     }
 
     if (isLargeScreen) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
         ) {
-            AnimatedVisibility(
-                visible = drawerState.targetValue == DrawerValue.Open,
-                enter = expandHorizontally(
-                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                    expandFrom = Alignment.Start,
-                ),
-                exit = shrinkHorizontally(
-                    animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-                    shrinkTowards = Alignment.Start,
-                ),
-            ) {
-                PermanentDrawerSheet(
-                    modifier = Modifier.imePadding(),
+            TopAppBar(
+                title = { Text(stringResource(Res.string.app_name)) },
+                navigationIcon = {
+                    TooltipIconButton(
+                        onClick = {
+                            appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                        },
+                        icon = Icons.Default.Menu,
+                        tooltip = stringResource(Res.string.open_menu),
+                        tooltipAnchorPosition = TooltipAnchorPosition.Below,
+                    )
+                },
+            )
+            Row(modifier = Modifier.weight(1f)) {
+                AnimatedVisibility(
+                    visible = drawerState.targetValue == DrawerValue.Open,
+                    enter = expandHorizontally(
+                        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                        expandFrom = Alignment.Start,
+                    ),
+                    exit = shrinkHorizontally(
+                        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+                        shrinkTowards = Alignment.Start,
+                    ),
                 ) {
-                    drawerSheetContent()
+                    PermanentDrawerSheet(
+                        modifier = Modifier.imePadding(),
+                    ) {
+                        drawerSheetContent()
+                    }
                 }
-            }
-            Box(modifier = Modifier.weight(1f)) {
-                scaffoldContent()
+                Box(modifier = Modifier.weight(1f)) {
+                    scaffoldContent(isLargeScreen)
+                }
             }
         }
     } else {
@@ -540,7 +556,7 @@ fun AppScaffold(
             },
             modifier = Modifier.background(MaterialTheme.colorScheme.background),
         ) {
-            scaffoldContent()
+            scaffoldContent(isLargeScreen)
         }
     }
 
