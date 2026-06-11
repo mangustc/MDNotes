@@ -46,6 +46,8 @@ kotlin {
         }
 
         jvmMain.dependencies {
+            implementation(compose.desktop.currentOs)
+
             implementation(libs.kotlinx.coroutinesSwing)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.icu)
@@ -91,6 +93,12 @@ kotlin {
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
+    }
+}
+
+compose.desktop {
+    application {
+        mainClass = "com.mangustc.mdnotes.MainKt"
     }
 }
 
