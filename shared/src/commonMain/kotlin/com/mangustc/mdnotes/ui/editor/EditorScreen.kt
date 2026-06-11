@@ -228,181 +228,187 @@ fun EditorScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding(),
+    Row(
+        horizontalArrangement = Arrangement.Center,
+        modifier = Modifier.fillMaxSize(),
     ) {
-        val toolbarScrollState = rememberScrollState()
-        if (!isViewingMode) {
-            HorizontalFloatingToolbar(
-                expanded = true,
-                expandedShadowElevation = 8.dp,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .align(Alignment.BottomCenter)
-                    .offset(y = -ScreenOffset)
-                    .zIndex(1f)
-                    .onSizeChanged {
-                        toolbarHeightDp = with(density) { it.height.toDp() + ScreenOffset * 3 }
-                    },
-            ) {
-                Row(modifier = Modifier.horizontalScroll(toolbarScrollState)) {
-                    TooltipIconButton(
-                        onClick = { viewModel.editor.onEvent(EditorEvent.Undo) },
-                        icon = Icons.AutoMirrored.Filled.Undo,
-                        tooltip = stringResource(Res.string.undo),
-                        enabled = viewModel.editor.state.undoState.canUndo,
-                    )
-                    TooltipIconButton(
-                        onClick = { viewModel.editor.onEvent(EditorEvent.Redo) },
-                        icon = Icons.AutoMirrored.Filled.Redo,
-                        tooltip = stringResource(Res.string.redo),
-                        enabled = viewModel.editor.state.undoState.canRedo,
-                    )
-                    TooltipIconButton(
-                        onClick = {
-                            photoPickerLauncher.launch()
-                        },
-                        icon = Icons.Default.Image,
-                        tooltip = stringResource(Res.string.attach_photo),
-                    )
-                    TooltipIconButton(
-                        onClick = { filePickerLauncher.launch() },
-                        icon = Icons.Default.AttachFile,
-                        tooltip = stringResource(Res.string.attach_file),
-                    )
-                    TooltipIconButton(
-                        onClick = { viewModel.editor.showLinkNoteDialog() },
-                        icon = Icons.Default.AddLink,
-                        tooltip = stringResource(Res.string.link_note),
-                    )
-                    TooltipIconButton(
-                        onClick = {
-                            viewModel.editor.onEvent(EditorEvent.Bold)
-                        },
-                        icon = Icons.Default.FormatBold,
-                        tooltip = stringResource(Res.string.bold),
-                    )
-                    TooltipIconButton(
-                        onClick = {
-                            viewModel.editor.onEvent(EditorEvent.Italic)
-                        },
-                        icon = Icons.Default.FormatItalic,
-                        tooltip = stringResource(Res.string.italic),
-                    )
-                    TooltipIconButton(
-                        onClick = {
-                            viewModel.editor.onEvent(EditorEvent.Code)
-                        },
-                        icon = Icons.Default.Code,
-                        tooltip = stringResource(Res.string.inline_code),
-                    )
-                }
-            }
-        } else {
-            Box(
-                modifier = Modifier
-                    .padding(end = 16.dp)
-                    .align(Alignment.BottomEnd)
-                    .offset(y = -ScreenOffset)
-                    .zIndex(1f)
-                    .onSizeChanged {
-                        toolbarHeightDp = with(density) { it.height.toDp() + ScreenOffset * 3 }
-                    },
-            ) {
-                TooltipBox(
-                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                        TooltipAnchorPosition.Above,
-                    ),
-                    tooltip = { PlainTooltip { Text(stringResource(Res.string.edit_note)) } },
-                    state = rememberTooltipState(),
-                ) {
-                    FloatingActionButton(
-                        onClick = { viewModel.editor.toggleViewingMode() },
-                    ) {
-                        Icon(
-                            Icons.Default.EditNote,
-                            contentDescription = stringResource(Res.string.edit_note),
-                        )
-                    }
-                }
-            }
-        }
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize(),
+                .widthIn(max = EDITOR_SCREEN_MAX_SIZE)
+                .fillMaxSize()
+                .imePadding(),
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .verticalScroll(scrollState),
-            ) {
-                Column {
-                    uiState.editorFrontMatter?.let { fm ->
-                        FrontMatterProperties(
-                            frontMatter = fm,
-                            allTags = uiState.allProjectTags,
-                            onUpdateKey = viewModel.editor::updateFmKey,
-                            onUpdateValue = viewModel.editor::updateFmValue,
-                            onAddProperty = viewModel.editor::addFmProperty,
-                            onAddTag = viewModel.editor::addFmTag,
-                            onRemoveTag = viewModel.editor::removeFmTag,
-                            onRemoveProperty = viewModel.editor::removeFmProperty,
+            val toolbarScrollState = rememberScrollState()
+            if (!isViewingMode) {
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    expandedShadowElevation = 8.dp,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .align(Alignment.BottomCenter)
+                        .offset(y = -ScreenOffset)
+                        .zIndex(1f)
+                        .onSizeChanged {
+                            toolbarHeightDp = with(density) { it.height.toDp() + ScreenOffset * 3 }
+                        },
+                ) {
+                    Row(modifier = Modifier.horizontalScroll(toolbarScrollState)) {
+                        TooltipIconButton(
+                            onClick = { viewModel.editor.onEvent(EditorEvent.Undo) },
+                            icon = Icons.AutoMirrored.Filled.Undo,
+                            tooltip = stringResource(Res.string.undo),
+                            enabled = viewModel.editor.state.undoState.canUndo,
+                        )
+                        TooltipIconButton(
+                            onClick = { viewModel.editor.onEvent(EditorEvent.Redo) },
+                            icon = Icons.AutoMirrored.Filled.Redo,
+                            tooltip = stringResource(Res.string.redo),
+                            enabled = viewModel.editor.state.undoState.canRedo,
+                        )
+                        TooltipIconButton(
+                            onClick = {
+                                photoPickerLauncher.launch()
+                            },
+                            icon = Icons.Default.Image,
+                            tooltip = stringResource(Res.string.attach_photo),
+                        )
+                        TooltipIconButton(
+                            onClick = { filePickerLauncher.launch() },
+                            icon = Icons.Default.AttachFile,
+                            tooltip = stringResource(Res.string.attach_file),
+                        )
+                        TooltipIconButton(
+                            onClick = { viewModel.editor.showLinkNoteDialog() },
+                            icon = Icons.Default.AddLink,
+                            tooltip = stringResource(Res.string.link_note),
+                        )
+                        TooltipIconButton(
+                            onClick = {
+                                viewModel.editor.onEvent(EditorEvent.Bold)
+                            },
+                            icon = Icons.Default.FormatBold,
+                            tooltip = stringResource(Res.string.bold),
+                        )
+                        TooltipIconButton(
+                            onClick = {
+                                viewModel.editor.onEvent(EditorEvent.Italic)
+                            },
+                            icon = Icons.Default.FormatItalic,
+                            tooltip = stringResource(Res.string.italic),
+                        )
+                        TooltipIconButton(
+                            onClick = {
+                                viewModel.editor.onEvent(EditorEvent.Code)
+                            },
+                            icon = Icons.Default.Code,
+                            tooltip = stringResource(Res.string.inline_code),
                         )
                     }
-                    Box {
-                        MarkdownEditorField(
-                            state = viewModel.editor.state.state,
-                            transformation = outputTransformation,
-                            onTextLayout = onLayoutChange,
-                            readOnly = isViewingMode,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .bringIntoViewRequester(bringIntoViewRequester)
-                                .padding(
-                                    start = 16.dp,
-                                    end = 16.dp,
-                                    bottom = toolbarHeightDp,
-                                )
-                                .onFocusEvent {},
-                        )
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .padding(end = 16.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(y = -ScreenOffset)
+                        .zIndex(1f)
+                        .onSizeChanged {
+                            toolbarHeightDp = with(density) { it.height.toDp() + ScreenOffset * 3 }
+                        },
+                ) {
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                            TooltipAnchorPosition.Above,
+                        ),
+                        tooltip = { PlainTooltip { Text(stringResource(Res.string.edit_note)) } },
+                        state = rememberTooltipState(),
+                    ) {
+                        FloatingActionButton(
+                            onClick = { viewModel.editor.toggleViewingMode() },
+                        ) {
+                            Icon(
+                                Icons.Default.EditNote,
+                                contentDescription = stringResource(Res.string.edit_note),
+                            )
+                        }
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize(),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState),
+                ) {
+                    Column {
+                        uiState.editorFrontMatter?.let { fm ->
+                            FrontMatterProperties(
+                                frontMatter = fm,
+                                allTags = uiState.allProjectTags,
+                                onUpdateKey = viewModel.editor::updateFmKey,
+                                onUpdateValue = viewModel.editor::updateFmValue,
+                                onAddProperty = viewModel.editor::addFmProperty,
+                                onAddTag = viewModel.editor::addFmTag,
+                                onRemoveTag = viewModel.editor::removeFmTag,
+                                onRemoveProperty = viewModel.editor::removeFmProperty,
+                            )
+                        }
+                        Box {
+                            MarkdownEditorField(
+                                state = viewModel.editor.state.state,
+                                transformation = outputTransformation,
+                                onTextLayout = onLayoutChange,
+                                readOnly = isViewingMode,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .bringIntoViewRequester(bringIntoViewRequester)
+                                    .padding(
+                                        start = 16.dp,
+                                        end = 16.dp,
+                                        bottom = toolbarHeightDp,
+                                    )
+                                    .onFocusEvent {},
+                            )
 
-                        layoutState?.let { state ->
-                            if (state.imageSpans.isNotEmpty() && uiState.project != null) {
-                                state.imageSpans.forEach { span ->
-                                    key(span.payload) {
-                                        MarkdownImageOverlay(
-                                            span = span,
-                                            state = viewModel.editor.state.state,
-                                            layoutResult = state.layout,
-                                            project = uiState.project!!,
-                                            density = density,
-                                            editorWidth = editorWidth,
-                                            imageAspectRatios = imageAspectRatios,
-                                            onRatioMeasured = { path, ratio ->
-                                                imageAspectRatios =
-                                                    imageAspectRatios + (path to ratio)
-                                            },
-                                            isViewingMode = uiState.isViewingMode,
-                                        )
+                            layoutState?.let { state ->
+                                if (state.imageSpans.isNotEmpty() && uiState.project != null) {
+                                    state.imageSpans.forEach { span ->
+                                        key(span.payload) {
+                                            MarkdownImageOverlay(
+                                                span = span,
+                                                state = viewModel.editor.state.state,
+                                                layoutResult = state.layout,
+                                                project = uiState.project!!,
+                                                density = density,
+                                                editorWidth = editorWidth,
+                                                imageAspectRatios = imageAspectRatios,
+                                                onRatioMeasured = { path, ratio ->
+                                                    imageAspectRatios =
+                                                        imageAspectRatios + (path to ratio)
+                                                },
+                                                isViewingMode = uiState.isViewingMode,
+                                            )
+                                        }
                                     }
                                 }
+
+                                editorSpans
+                                    .filterIsInstance<SpanInfo.Link>()
+                                    .forEach { span ->
+                                        key(span.payload) {
+                                            MarkdownLinkOverlay(
+                                                span = span,
+                                                state = viewModel.editor.state.state,
+                                                layoutResult = state.layout,
+                                                viewModel = viewModel,
+                                            )
+                                        }
+                                    }
                             }
-
-                            editorSpans
-                                .filterIsInstance<SpanInfo.Link>()
-                                .forEach { span ->
-                                    key(span.payload) {
-                                        MarkdownLinkOverlay(
-                                            span = span,
-                                            state = viewModel.editor.state.state,
-                                            layoutResult = state.layout,
-                                            viewModel = viewModel,
-                                        )
-                                    }
-                                }
                         }
                     }
                 }
@@ -787,3 +793,5 @@ fun MarkdownLinkOverlay(
         }
     }
 }
+
+val EDITOR_SCREEN_MAX_SIZE = 800.dp

@@ -124,11 +124,14 @@ import org.jetbrains.compose.resources.stringResource
 fun AppScaffold(
     appViewModel: AppViewModel,
 ) = BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-    val isLargeScreen = maxWidth > 840.dp
+    val isLargeScreen = remember(maxWidth) {
+        maxWidth > 840.dp
+    }
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val drawerState =
+        rememberDrawerState(if (isLargeScreen) DrawerValue.Open else DrawerValue.Closed)
 
     val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
 
@@ -142,14 +145,6 @@ fun AppScaffold(
     val uriHandler = LocalUriHandler.current
 
     LaunchedEffect(isLargeScreen) {
-        if (isLargeScreen) {
-            drawerState.open()
-        } else {
-            drawerState.close()
-        }
-    }
-
-    LaunchedEffect(Unit) {
         appViewModel.navigationEvents.collect {
             when (it) {
                 is NavigationEvent.GoToEditor -> {

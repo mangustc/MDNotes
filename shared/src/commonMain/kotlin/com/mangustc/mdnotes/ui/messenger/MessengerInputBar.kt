@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -30,6 +32,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -60,10 +63,14 @@ fun MessengerInputBar(
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .widthIn(max = MESSENGER_SCREEN_MAX_SIZE)
+            .clip(shape = RoundedCornerShape(24.dp))
             .background(
-                color = if (carouselExpanded || isEditing) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
+                if (carouselExpanded || isEditing) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent,
             )
-            .padding(8.dp),
+            .padding(8.dp)
+            .fillMaxWidth(),
     ) {
         AnimatedVisibility(
             visible = isEditing,

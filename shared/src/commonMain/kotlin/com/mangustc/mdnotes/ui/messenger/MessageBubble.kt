@@ -8,7 +8,6 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -130,8 +129,8 @@ fun MessageBubble(
     val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
 
     val overlayColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f)
-    BoxWithConstraints(
-        contentAlignment = Alignment.TopEnd,
+    Box(
+        contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxWidth()
             .drawWithContent {
@@ -153,11 +152,13 @@ fun MessageBubble(
             )
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
-        val bubbleMaxWidth = maxWidth * 0.9f
-        Row(horizontalArrangement = Arrangement.End) {
+        Row(
+            horizontalArrangement = Arrangement.End,
+            modifier = Modifier.width(MESSENGER_SCREEN_MAX_SIZE),
+        ) {
             Surface(
                 modifier = Modifier
-                    .widthIn(max = bubbleMaxWidth)
+                    .widthIn(max = 400.dp)
                     .clip(
                         RoundedCornerShape(
                             topStart = 16.dp,

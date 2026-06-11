@@ -299,8 +299,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .zIndex(1f)
-                    .onSizeChanged { inputBarHeightDp = with(density) { it.height.toDp() } }
-                    .fillMaxWidth(),
+                    .onSizeChanged { inputBarHeightDp = with(density) { it.height.toDp() } },
             )
             when {
                 uiState.messengerIsLoading -> {
@@ -430,3 +429,5 @@ fun MessengerScreen(viewModel: AppViewModel) {
         )
     }
 }
+
+val MESSENGER_SCREEN_MAX_SIZE = 600.dp
