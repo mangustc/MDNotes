@@ -99,6 +99,10 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.mangustc.mdnotes.MainKt"
+
+        nativeDistributions {
+            includeAllModules = true
+        }
     }
 }
 
