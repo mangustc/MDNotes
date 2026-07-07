@@ -18,7 +18,7 @@ fun App(viewModel: AppViewModel) {
             .build()
     }
 
-    MdnotesTheme(darkTheme = true) {
+    MdnotesTheme(darkTheme = false) {
         AppScaffold(appViewModel = viewModel)
     }
 }

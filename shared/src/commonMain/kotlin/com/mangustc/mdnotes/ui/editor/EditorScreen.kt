@@ -80,6 +80,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.onFocusEvent
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -613,7 +618,18 @@ fun TagEditor(
                 },
                 modifier = Modifier
                     .height(InputChipDefaults.Height)
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable),
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
+                    .onPreviewKeyEvent {
+                        if (it.type == KeyEventType.KeyDown && it.key == Key.Enter) {
+                            if (text.isNotBlank()) onAddTag(text.trim())
+                            text = ""
+                            expanded = false
+                            focusManager.clearFocus()
+                            true
+                        } else {
+                            false
+                        }
+                    },
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface,
                     lineHeight = with(LocalDensity.current) { InputChipDefaults.Height.toSp() },
