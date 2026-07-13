@@ -84,6 +84,7 @@ class SyncProjectUseCase(
                 }
 
                 is SyncFileAction.Download -> {
+                    println(remotePath)
                     val bytes = syncRepository.downloadFile(remotePath)
                         ?: throw SyncStateException()
                     projectRepository.writeFile(

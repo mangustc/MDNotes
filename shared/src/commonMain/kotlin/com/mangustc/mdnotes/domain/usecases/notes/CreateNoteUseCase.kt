@@ -5,6 +5,7 @@ import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.usecases.UseCase
+import com.mangustc.mdnotes.domain.util.sanitizeFileName
 import kotlin.time.Clock
 
 data class CreateNoteInput(
@@ -29,9 +30,11 @@ class CreateNoteUseCase(
         }
         val initialContent = "$frontMatterBuilder\n---\n${input.initialText}"
 
+        val sanitizedNoteName = sanitizeFileName("${input.name}.md", "New Note")
+
         val newProjectFile = projectRepository.writeFile(
             project = input.project,
-            relativePath = input.project.notesRelativePath.resolve(RelativePath("${input.name}.md")),
+            relativePath = input.project.notesRelativePath.resolve(RelativePath(sanitizedNoteName)),
             byteArray = initialContent.toByteArray(),
             fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
         )

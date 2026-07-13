@@ -21,6 +21,7 @@ import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SearchQuery
 import com.mangustc.mdnotes.domain.repositories.PlatformListFilesHandler
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
+import com.mangustc.mdnotes.domain.util.sanitizeFileName
 import io.github.vinceglb.filekit.createDirectories
 import io.github.vinceglb.filekit.delete
 import io.github.vinceglb.filekit.div
@@ -199,7 +200,7 @@ class CommonProjectRepository(
 
             writeFile(
                 project = project,
-                relativePath = toDirPath / RelativePath(fromPath.name),
+                relativePath = toDirPath / RelativePath(sanitizeFileName(fromPath.name)),
                 byteArray = bytes,
                 fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
                 createParents = true,

@@ -5,6 +5,7 @@ import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.usecases.UseCase
+import com.mangustc.mdnotes.domain.util.sanitizeFileName
 
 data class RenameNoteInput(
     val project: Project,
@@ -19,11 +20,13 @@ class RenameNoteUseCase(
     private val getNoteUseCase: GetNoteUseCase,
 ) : UseCase<RenameNoteInput, Note> {
     override suspend fun invoke(input: RenameNoteInput): Note {
+        val sanitizedNoteName = sanitizeFileName("${input.newName}.md", "New Note")
+
         val newProjectFile = projectRepository.moveFile(
             project = input.project,
             relativePath = input.note.projectFile.relativePath,
             newRelativePath = input.note.projectFile.relativePath.parent.resolve(
-                RelativePath("${input.newName}.md"),
+                RelativePath(sanitizedNoteName),
             ),
             fileExistsStrategy = ProjectRepository.FileExistsStrategy.AUTO_RENAME,
         )
