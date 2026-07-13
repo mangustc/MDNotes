@@ -40,6 +40,7 @@ fun RenameNoteDialog(
                     value = name,
                     onValueChange = { onNameChange(it) },
                     label = { Text(stringResource(Res.string.note_name)) },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
                     ),

@@ -51,6 +51,7 @@ fun CreateNoteDialog(
                     keyboardActions = KeyboardActions(
 
                     ),
+                    singleLine = true,
                     label = { Text(stringResource(Res.string.note_name)) },
                     modifier = Modifier
                         .fillMaxWidth()
