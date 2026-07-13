@@ -100,6 +100,14 @@ compose.desktop {
     application {
         mainClass = "com.mangustc.mdnotes.MainKt"
 
+        jvmArgs(
+            "-Xmx256m",
+            "-Xms64m",
+            "-XX:+UseG1GC",
+            "-XX:MinHeapFreeRatio=15",
+            "-XX:MaxHeapFreeRatio=30"
+        )
+
         nativeDistributions {
             includeAllModules = true
         }
