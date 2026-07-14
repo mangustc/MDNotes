@@ -12,6 +12,11 @@ import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.DelicateCryptographyApi
 import dev.whyoleg.cryptography.algorithms.MD5
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlin.time.Clock
@@ -75,34 +80,41 @@ class SyncProjectUseCase(
             )
         }
 
-        actions.forEach { action ->
-            val remotePath = remoteRoot.resolve(action.relativePath)
-            when (action) {
-                is SyncFileAction.Upload, is SyncFileAction.ConflictUpload -> {
-                    val bytes = projectRepository.readFile(project, action.relativePath)
-                    syncRepository.uploadFile(remotePath, bytes)
+        val semaphore = Semaphore(MAX_CONCURRENT_CONNECTIONS)
+        coroutineScope {
+            actions.map { action ->
+                async {
+                    semaphore.withPermit {
+                        val remotePath = remoteRoot.resolve(action.relativePath)
+                        when (action) {
+                            is SyncFileAction.Upload, is SyncFileAction.ConflictUpload -> {
+                                val bytes = projectRepository.readFile(project, action.relativePath)
+                                syncRepository.uploadFile(remotePath, bytes)
+                            }
+
+                            is SyncFileAction.Download -> {
+                                println(remotePath)
+                                val bytes = syncRepository.downloadFile(remotePath)
+                                    ?: throw SyncStateException()
+                                projectRepository.writeFile(
+                                    project = project,
+                                    relativePath = action.relativePath,
+                                    byteArray = bytes,
+                                    fileExistsStrategy = ProjectRepository.FileExistsStrategy.OVERWRITE,
+                                )
+                            }
+
+                            is SyncFileAction.DeleteLocal -> projectRepository.deleteFile(
+                                project = project,
+                                relativePath = action.relativePath,
+                            )
+
+                            is SyncFileAction.DeleteRemote -> syncRepository.deleteFile(remotePath)
+                            is SyncFileAction.NoOp -> Unit
+                        }
+                    }
                 }
-
-                is SyncFileAction.Download -> {
-                    println(remotePath)
-                    val bytes = syncRepository.downloadFile(remotePath)
-                        ?: throw SyncStateException()
-                    projectRepository.writeFile(
-                        project = project,
-                        relativePath = action.relativePath,
-                        byteArray = bytes,
-                        fileExistsStrategy = ProjectRepository.FileExistsStrategy.OVERWRITE,
-                    )
-                }
-
-                is SyncFileAction.DeleteLocal -> projectRepository.deleteFile(
-                    project = project,
-                    relativePath = action.relativePath,
-                )
-
-                is SyncFileAction.DeleteRemote -> syncRepository.deleteFile(remotePath)
-                is SyncFileAction.NoOp -> Unit
-            }
+            }.awaitAll()
         }
 
 
@@ -143,18 +155,24 @@ class SyncProjectUseCase(
 
     private suspend fun snapshotLocal(
         project: Project,
-    ): Map<String, String> {
-        return projectRepository.getProjectFilesList(project).mapNotNull { file ->
+    ): Map<String, String> = coroutineScope {
+        projectRepository.getProjectFilesList(project).mapNotNull { file ->
             if (file.relativePath == SyncManifest.ProjectRelativePath) {
                 null
             } else {
-                val bytes = projectRepository.readFile(project, file.relativePath)
-                file.relativePath.toString() to md5(bytes)
+                async {
+                    val bytes = projectRepository.readFile(project, file.relativePath)
+                    file.relativePath.toString() to md5(bytes)
+                }
             }
-        }.toMap()
+        }.awaitAll().toMap()
     }
 
     private suspend fun md5(bytes: ByteArray): String {
         return md5Provider.hash(bytes).joinToString("") { "%02x".format(it) }
+    }
+
+    companion object {
+        const val MAX_CONCURRENT_CONNECTIONS = 10
     }
 }
