@@ -34,48 +34,6 @@ class SendNoteUseCase(
 ) : UseCase<SendNoteInput, Unit> {
     override suspend fun invoke(input: SendNoteInput) {
         val isEditedNote = input.editNote != null
-        val targetNote = if (isEditedNote) {
-            input.editNote
-        } else {
-            val localDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
-            val customFormat = LocalDateTime.Format {
-                year()
-                monthNumber(Padding.ZERO)
-                day(padding = Padding.ZERO)
-                char('_')
-                hour(Padding.ZERO)
-                minute(Padding.ZERO)
-                second(Padding.ZERO)
-            }
-            val timestamp = customFormat.format(localDateTime)
-            val name = "fleeting-$timestamp"
-            val tags = listOf(FrontMatter.QUICK_NOTE_TAG)
-            createNoteUseCase(
-                CreateNoteInput(
-                    project = input.project,
-                    name = name,
-                    tags = tags,
-                ),
-            )
-        }
-
-        val baseText = projectRepository.readFile(
-            project = input.project,
-            relativePath = targetNote.projectFile.relativePath,
-        ).decodeToString()
-
-        val parentContent = if (isEditedNote) {
-            val frontMatterEnd = run {
-                if (!baseText.trimStart().startsWith("---")) return@run 0
-                val lines = baseText.lines()
-                val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
-                if (closeIdx < 0) 0
-                else lines.take(closeIdx + 2).joinToString("\n").length
-            }
-            baseText.substring(0, frontMatterEnd).trimEnd()
-        } else {
-            baseText
-        }
 
         val attachmentLines = buildString {
             input.attachments.forEach { attachment ->
@@ -107,26 +65,65 @@ class SendNoteUseCase(
             }
         }
 
-        val finalContent = when {
+        val bodyContent = when {
             input.body.isNotEmpty() && attachmentLines.isNotEmpty() ->
-                "$parentContent\n\n${input.body}$attachmentLines"
+                "${input.body}$attachmentLines"
 
-            input.body.isNotEmpty() ->
-                "$parentContent\n\n${input.body}"
-
-            attachmentLines.isNotEmpty() ->
-                "$parentContent\n$attachmentLines"
-
-            else -> parentContent
+            input.body.isNotEmpty() -> input.body
+            attachmentLines.isNotEmpty() -> attachmentLines.trimStart()
+            else -> ""
         }
 
-
-        saveNoteTextUseCase(
-            SaveNoteTextInput(
+        if (isEditedNote) {
+            val targetNote = input.editNote
+            val baseText = projectRepository.readFile(
                 project = input.project,
-                note = targetNote,
-                text = finalContent,
-            ),
-        )
+                relativePath = targetNote.projectFile.relativePath,
+            ).decodeToString()
+
+            val frontMatterEnd = run {
+                if (!baseText.trimStart().startsWith("---")) return@run 0
+                val lines = baseText.lines()
+                val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
+                if (closeIdx < 0) 0
+                else lines.take(closeIdx + 2).joinToString("\n").length
+            }
+            val parentContent = baseText.substring(0, frontMatterEnd).trimEnd()
+            val finalContent =
+                if (bodyContent.isNotEmpty()) "$parentContent\n\n$bodyContent" else parentContent
+
+            saveNoteTextUseCase(
+                SaveNoteTextInput(
+                    project = input.project,
+                    note = targetNote,
+                    text = finalContent,
+                ),
+            )
+        } else {
+            if (bodyContent.isBlank()) return
+
+            val localDateTime = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+            val customFormat = LocalDateTime.Format {
+                year()
+                monthNumber(Padding.ZERO)
+                day(padding = Padding.ZERO)
+                char('_')
+                hour(Padding.ZERO)
+                minute(Padding.ZERO)
+                second(Padding.ZERO)
+            }
+            val timestamp = customFormat.format(localDateTime)
+            val name = "fleeting-$timestamp"
+            val tags = listOf(FrontMatter.QUICK_NOTE_TAG)
+
+            createNoteUseCase(
+                CreateNoteInput(
+                    project = input.project,
+                    name = name,
+                    tags = tags,
+                    initialText = "\n$bodyContent",
+                ),
+            )
+        }
     }
 }
