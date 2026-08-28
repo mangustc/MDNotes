@@ -47,6 +47,8 @@ class ProjectActions(
             }.getOrElse { return@launch }
             deps.uiState.update { it.copy(project = project, settings = settings) }
 
+            deps.globalActions.updateNoteLists()
+
             runUseCase(deps.globalActions::onEvent) {
                 syncDatabaseUseCase(SyncDatabaseInput(project = project))
             }
@@ -68,6 +70,8 @@ class ProjectActions(
                     )
                 }.getOrElse { return@launch }
                 deps.uiState.update { it.copy(project = project, settings = settings) }
+
+                deps.globalActions.updateNoteLists()
 
                 runUseCase(deps.globalActions::onEvent) {
                     syncDatabaseUseCase(SyncDatabaseInput(project = project))
