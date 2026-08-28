@@ -341,7 +341,7 @@ class CommonProjectRepository(
         relativePath: RelativePath,
     ): ProjectFile = withContext(Dispatchers.IO) {
         return@withContext ProjectFile(
-            domainFile = getFile(project, relativePath),
+            domainFile = project.rootDomainFile / relativePath,
             relativePath = relativePath,
         )
     }
