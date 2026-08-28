@@ -4,6 +4,8 @@ import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.usecases.project.LoadSavedProjectUseCase
 import com.mangustc.mdnotes.domain.usecases.project.SelectProjectInput
 import com.mangustc.mdnotes.domain.usecases.project.SelectProjectUseCase
+import com.mangustc.mdnotes.domain.usecases.project.SyncDatabaseInput
+import com.mangustc.mdnotes.domain.usecases.project.SyncDatabaseUseCase
 import com.mangustc.mdnotes.domain.usecases.settings.GetSettingsInput
 import com.mangustc.mdnotes.domain.usecases.settings.GetSettingsUseCase
 import com.mangustc.mdnotes.domain.usecases.sync.SyncProjectInput
@@ -25,6 +27,7 @@ class ProjectActions(
     private val loadSavedProjectUseCase: LoadSavedProjectUseCase by inject()
     private val selectProjectUseCase: SelectProjectUseCase by inject()
     private val getSettingsUseCase: GetSettingsUseCase by inject()
+    private val syncDatabaseUseCase: SyncDatabaseUseCase by inject()
 
     fun onProjectSelected(projectPath: DomainFile) {
         deps.scope.launch {
@@ -43,6 +46,10 @@ class ProjectActions(
                 )
             }.getOrElse { return@launch }
             deps.uiState.update { it.copy(project = project, settings = settings) }
+
+            runUseCase(deps.globalActions::onEvent) {
+                syncDatabaseUseCase(SyncDatabaseInput(project = project))
+            }
             deps.globalActions.updateNoteLists()
         }
     }
@@ -61,6 +68,10 @@ class ProjectActions(
                     )
                 }.getOrElse { return@launch }
                 deps.uiState.update { it.copy(project = project, settings = settings) }
+
+                runUseCase(deps.globalActions::onEvent) {
+                    syncDatabaseUseCase(SyncDatabaseInput(project = project))
+                }
                 deps.globalActions.updateNoteLists()
             } else {
                 deps.uiState.update { it.copy(messengerIsLoading = false) }
@@ -93,6 +104,10 @@ class ProjectActions(
                 }.getOrElse { return@launch }
             } finally {
                 deps.uiState.update { it.copy(isSyncInProgress = false) }
+
+                runUseCase(deps.globalActions::onEvent) {
+                    syncDatabaseUseCase(SyncDatabaseInput(project = project))
+                }
                 deps.globalActions.updateNoteLists()
             }
         }

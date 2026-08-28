@@ -5,9 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsInput
 import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsUseCase
-import com.mangustc.mdnotes.domain.usecases.project.SyncDatabaseInput
-import com.mangustc.mdnotes.domain.usecases.project.SyncDatabaseUseCase
-import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.actions.DrawerActions
 import com.mangustc.mdnotes.ui.viewmodel.actions.EditorActions
 import com.mangustc.mdnotes.ui.viewmodel.actions.MessengerActions
@@ -28,7 +25,6 @@ import kotlinx.coroutines.flow.update
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
-    private val syncDatabaseUseCase: SyncDatabaseUseCase,
     private val getAllTagsUseCase: GetAllTagsUseCase,
 ) : ViewModel(), AppGlobalActions {
     private val _uiState = MutableStateFlow(AppUiState())
@@ -76,13 +72,6 @@ class AppViewModel(
 
     override suspend fun updateNoteLists() {
         val project = _uiState.value.project ?: return
-        runUseCase(::onEvent) {
-            syncDatabaseUseCase(
-                SyncDatabaseInput(
-                    project = project,
-                ),
-            )
-        }.getOrElse { return }
         _uiState.update {
             it.copy(
                 allProjectTags = getAllTagsUseCase(

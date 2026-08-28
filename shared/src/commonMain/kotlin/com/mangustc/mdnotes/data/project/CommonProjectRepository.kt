@@ -258,9 +258,14 @@ class CommonProjectRepository(
             throw FileNotWritableException(relativePath.value, e)
         }
 
+        val domainFile = DomainFile(file)
+        val resultingRelativePath = relativePath.parent.resolve(RelativePath(file.name))
+
+        updateNoteInDatabase(project, resultingRelativePath, domainFile, byteArray)
+
         ProjectFile(
-            domainFile = DomainFile(file),
-            relativePath = relativePath.parent.resolve(RelativePath(file.name)),
+            domainFile = domainFile,
+            relativePath = resultingRelativePath,
         )
     }
 
@@ -270,11 +275,11 @@ class CommonProjectRepository(
     ) = withContext(Dispatchers.IO) {
         val file = getFile(project, relativePath)
 
-        if (!file.file.isRegularFile()) {
-            return@withContext
+        if (file.file.isRegularFile()) {
+            file.file.delete(mustExist = false)
         }
 
-        file.file.delete(mustExist = false)
+        noteDao.deleteByUri(file.path)
     }
 
     override suspend fun copyFile(
@@ -340,6 +345,38 @@ class CommonProjectRepository(
             relativePath = relativePath,
         )
     }
+
+    private suspend fun updateNoteInDatabase(
+        project: Project,
+        relativePath: RelativePath,
+        file: DomainFile,
+        contentBytes: ByteArray,
+    ) {
+        if (relativePath.parent == project.notesRelativePath && file.extension.equals(
+                "md",
+                ignoreCase = true
+            )
+        ) {
+            val projectId = getOrCreateProjectId(project) ?: return
+            val existing = noteDao.getNoteByUri(file.path)
+            val fullText = contentBytes.decodeToString()
+            val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
+
+            val entity = NoteEntity(
+                id = existing?.id ?: 0,
+                projectId = projectId,
+                uri = file.path,
+                name = file.nameWithoutExtension,
+                lastModified = kotlin.runCatching { file.file.lastModified().toEpochMilliseconds() }
+                    .getOrDefault(kotlin.time.Clock.System.now().toEpochMilliseconds()),
+                createdAt = frontMatter.toCreatedAtMillis() ?: existing?.createdAt,
+                tags = frontMatter.toTagString(),
+                body = body,
+            )
+            noteDao.insertNote(entity)
+        }
+    }
+
 
     private suspend fun getOrCreateProjectId(project: Project): Long? {
         val rootPath = project.rootDomainFile.path
