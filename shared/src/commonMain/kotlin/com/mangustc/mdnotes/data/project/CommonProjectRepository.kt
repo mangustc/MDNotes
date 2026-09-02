@@ -115,17 +115,23 @@ class CommonProjectRepository(
         val projectId = getOrCreateProjectId(project)
             ?: throw ProjectAccessException(project.notesRelativePath.value)
 
-        val files =
-            platformListFilesHandler.getDirectoryFiles(project.rootDomainFile / project.notesRelativePath)
-                ?.filter { it.extension == "md" }
-                ?: throw ProjectAccessException(project.notesRelativePath.value)
+        val allFiles = platformListFilesHandler.getAllProjectFiles(project)
+            ?: throw ProjectAccessException(project.notesRelativePath.value)
+
+        val noteFiles = allFiles.filter {
+            it.relativePath.parent == project.notesRelativePath &&
+                    it.domainFile.extension.equals("md", ignoreCase = true)
+        }
 
         val existingNotes = noteDao.searchNotes(SearchQuery().buildRoomRawQuery(project))
-        val existingUris = existingNotes.associateBy { it.uri }
+        val existingByUri = existingNotes.associateBy { it.uri }
+        val existingByName = existingNotes.associateBy { it.name }
 
-        files.forEach { file ->
+        noteFiles.forEach { projectFile ->
+            val file = projectFile.domainFile
             val uriStr = file.path
-            val cached = existingUris[uriStr]
+            val name = file.nameWithoutExtension
+            val cached = existingByUri[uriStr] ?: existingByName[name]
 
             if (cached == null || file.file.lastModified()
                     .toEpochMilliseconds() > cached.lastModified
@@ -137,7 +143,6 @@ class CommonProjectRepository(
                 }
                 val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
                 val tags = frontMatter.toTagString()
-                val name = file.nameWithoutExtension
 
                 val entity = NoteEntity(
                     id = cached?.id ?: 0,
@@ -153,9 +158,12 @@ class CommonProjectRepository(
             }
         }
 
-        val currentFileUris = files.map { it.path }.toSet()
+        val currentFileUris = noteFiles.map { it.domainFile.path }.toSet()
+        val currentFileNames = noteFiles.map { it.domainFile.nameWithoutExtension }.toSet()
         existingNotes.forEach { cached ->
-            if (cached.uri !in currentFileUris) noteDao.deleteByUri(cached.uri)
+            if (cached.uri !in currentFileUris && cached.name !in currentFileNames) {
+                noteDao.deleteByUri(cached.uri)
+            }
         }
     }
 

@@ -14,9 +14,17 @@ class AndroidPlatformListFilesHandler(
     private val context: Context,
 ) : PlatformListFilesHandler {
     override suspend fun getDirectoryFiles(directory: DomainFile): List<DomainFile>? {
-        val rootDoc = DocumentFile.fromTreeUri(context, directory.file.toAndroidUri())
+        val rootUri = directory.file.toAndroidUri()
+        val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
             ?: return null
-        return rootDoc.listFiles().map { documentFile ->
+
+        val targetDir = if (rootDoc.name == directory.name) {
+            rootDoc
+        } else {
+            rootDoc.findFile(directory.name) ?: return emptyList()
+        }
+
+        return targetDir.listFiles().map { documentFile ->
             DomainFile(PlatformFile(documentFile.uri))
         }
     }
@@ -46,7 +54,7 @@ class AndroidPlatformListFilesHandler(
             } else {
                 out.add(
                     ProjectFile(
-                        domainFile = DomainFile(PlatformFile(file.uri.toString())),
+                        domainFile = DomainFile(PlatformFile(file.uri)),
                         relativePath = relPath,
                     ),
                 )
