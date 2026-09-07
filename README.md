@@ -1,23 +1,44 @@
-This is a Kotlin Multiplatform project targeting Android, Desktop (JVM).
+# 📝 MDNotes
 
-* [/shared](./shared/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./shared/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./shared/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./shared/src/jvmMain/kotlin)
-    folder is the appropriate location.
+<div class="top-screenshot"><img src="/assets/top-screenshot-andorid.png" style="max-width: 100%; max-height: 35em;"></div>
 
-### Running the apps
+A local-first Markdown note-taking app that bridges the gap between quick fleeting thoughts and long-term knowledge management.
 
-Use the run configurations provided by the run widget in your IDE's toolbar. You can also use these commands and options:
+## 🧩 The problem
 
-- Android app: `./gradlew :androidApp:assembleDebug`
-- Desktop app:
-  - Hot reload: `./gradlew :desktopApp:hotRun --auto`
-  - Standard run: `./gradlew :desktopApp:run`
+1. **Simple note-taking apps** make it easy to quickly capture ideas, but usually lack in note linking, tagging and advanced search functions. 
+2. **Full [PKM](https://en.wikipedia.org/wiki/Personal_knowledge_management) tools** (Obsidian, Joplin and Logseq) include powerful organization, but make it difficult to create and view quick notes.
 
----
+This results in quick notes and permanent being divided between two apps which adds friction.
 
-Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+## 💡 The solution
+
+MDNotes combines both approaches into a single knowledge base:
+
+1. A **messenger-style feed** to dump ideas, thoughts and links without cluttering the permanent notes.
+2. A **Markdown editor** with tags, note linking and text formatting for your [PKM](https://en.wikipedia.org/wiki/Personal_knowledge_management).
+
+## ✨ Features
+
+- **Local-First & Offline**: Your notes are plain `.md` files stored directly on your file system.
+- **Messenger View**: A fast chat-like interface for fleeting notes and quick capture.
+- **Markdown Editor**: Support for headings, formatting, image previews, and YAML front matter.
+- **Note Linking & Tags**: Link notes together and organize them with searchable tags.
+- **Cloud Sync**: Built-in synchronization via [Yandex Disk](https://360.yandex.ru/disk/).
+- **Cross-Platform**: Runs on Android and Desktop (JVM).
+
+## 🗺️ Roadmap
+
+This project is an active **Work in Progress**. Planned features and improvements include:
+
+- Backlinks (viewing all notes linking to the current note)
+- Multiple editor tabs
+- Smoother navigation transitions
+- Search and indexing performance optimizations
+
+## 🚀 Getting Started
+
+### 🛠️ Development prerequisites
+
+1. [Android Studio](https://developer.android.com/studio) (or IntelliJ IDEA)
+2. [Kotlin Multiplatform Plugin](https://plugins.jetbrains.com/plugin/14936-kotlin-multiplatform)
