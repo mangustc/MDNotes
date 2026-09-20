@@ -74,7 +74,7 @@ fun AttachmentCarouselStripViewing(
                     Attachment.AttachmentType.IMAGE -> {
                         {
                             val images = attachments.mapNotNull {
-                                if (attachment.type == Attachment.AttachmentType.FILE) return@mapNotNull null
+                                if (it.type == Attachment.AttachmentType.FILE) return@mapNotNull null
                                 it.domainFile
                             }
                             actions.onImageClick(images, attachment.domainFile)
@@ -156,7 +156,7 @@ fun AttachmentCarouselStrip(
                             Attachment.AttachmentType.IMAGE -> {
                                 {
                                     val images = attachments.mapNotNull {
-                                        if (attachment.type == Attachment.AttachmentType.FILE) return@mapNotNull null
+                                        if (it.type == Attachment.AttachmentType.FILE) return@mapNotNull null
                                         it.domainFile
                                     }
                                     actions.onImageClick(images, attachment.domainFile)
