@@ -200,7 +200,7 @@ fun EditorScreen(
         viewModel.editor.onEvent(EditorEvent.AttachPhoto(path = DomainFile(file)))
     }
     val filePickerLauncher = rememberFilePickerLauncher(
-        type = FileKitType.Image,
+        type = FileKitType.File(),
     ) { file ->
         if (file == null) return@rememberFilePickerLauncher
         viewModel.editor.onEvent(EditorEvent.AttachFile(path = DomainFile(file)))
