@@ -153,22 +153,23 @@ fun AppScaffold(
     val focusManager = LocalFocusManager.current
     val uriHandler = LocalUriHandler.current
 
+    val scope = rememberCoroutineScope()
     val currentIsLargeScreen by rememberUpdatedState(isLargeScreen)
     LaunchedEffect(Unit) {
         mainViewModel.navigationEvents.collect {
             when (it) {
                 is NavigationEvent.GoToEditor -> {
-                    if (!currentIsLargeScreen) drawerState.close()
+                    if (!currentIsLargeScreen) scope.launch { drawerState.close() }
                     navController.navigate(EditorDestination(it.note.projectFile.relativePath.value))
                 }
 
                 is NavigationEvent.GoBack -> navController.popBackStack()
                 is NavigationEvent.OpenDrawer -> {
-                    drawerState.open()
+                    scope.launch { drawerState.open() }
                 }
 
                 is NavigationEvent.CloseDrawer -> {
-                    drawerState.close()
+                    scope.launch { drawerState.close() }
                 }
 
                 is NavigationEvent.OpenUrl -> uriHandler.openUri(it.url)
@@ -197,7 +198,6 @@ fun AppScaffold(
         }
     }
 
-    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(Unit) {
         fun toast(message: String) {
@@ -450,7 +450,13 @@ fun AppScaffold(
                                 } else {
                                     TooltipIconButton(
                                         onClick = {
-                                            mainViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                                            mainViewModel.onEvent(
+                                                if (drawerState.targetValue == DrawerValue.Open) {
+                                                    NavigationEvent.CloseDrawer
+                                                } else {
+                                                    NavigationEvent.OpenDrawer
+                                                },
+                                            )
                                         },
                                         icon = Icons.Default.Menu,
                                         tooltip = stringResource(Res.string.open_menu),
@@ -523,7 +529,13 @@ fun AppScaffold(
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = {
-                            mainViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                            mainViewModel.onEvent(
+                                if (drawerState.targetValue == DrawerValue.Open) {
+                                    NavigationEvent.CloseDrawer
+                                } else {
+                                    NavigationEvent.OpenDrawer
+                                },
+                            )
                         },
                         icon = Icons.Default.Menu,
                         tooltip = stringResource(Res.string.open_menu),
