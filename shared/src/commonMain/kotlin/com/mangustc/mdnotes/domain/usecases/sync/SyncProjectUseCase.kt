@@ -86,7 +86,7 @@ class SyncProjectUseCase(
         }
 
         val semaphore = Semaphore(MAX_CONCURRENT_CONNECTIONS)
-        coroutineScope {
+        val finalFiles = coroutineScope {
             actions.map { action ->
                 async {
                     semaphore.withPermit {
@@ -95,10 +95,10 @@ class SyncProjectUseCase(
                             is SyncFileAction.Upload, is SyncFileAction.ConflictUpload -> {
                                 val bytes = projectRepository.readFile(project, action.relativePath)
                                 syncRepository.uploadFile(remotePath, bytes)
+                                action.relativePath.value to md5(bytes)
                             }
 
                             is SyncFileAction.Download -> {
-                                println(remotePath)
                                 val bytes = syncRepository.downloadFile(remotePath)
                                     ?: throw SyncStateException()
                                 projectRepository.writeFile(
@@ -107,29 +107,38 @@ class SyncProjectUseCase(
                                     byteArray = bytes,
                                     fileExistsStrategy = ProjectRepository.FileExistsStrategy.OVERWRITE,
                                 )
+                                action.relativePath.value to md5(bytes)
                             }
 
-                            is SyncFileAction.DeleteLocal -> projectRepository.deleteFile(
-                                project = project,
-                                relativePath = action.relativePath,
-                            )
+                            is SyncFileAction.DeleteLocal -> {
+                                projectRepository.deleteFile(
+                                    project = project,
+                                    relativePath = action.relativePath,
+                                )
+                                null
+                            }
 
-                            is SyncFileAction.DeleteRemote -> syncRepository.deleteFile(remotePath)
-                            is SyncFileAction.NoOp -> Unit
+                            is SyncFileAction.DeleteRemote -> {
+                                syncRepository.deleteFile(remotePath)
+                                null
+                            }
+
+                            is SyncFileAction.NoOp -> {
+                                localManifest.files[action.relativePath.value]
+                                    ?.let { hash -> action.relativePath.value to hash }
+                            }
                         }
                     }
                 }
-            }.awaitAll()
+            }.awaitAll().filterNotNull().toMap()
         }
 
-
-        val finalLocalState = snapshotLocal(project)
         val manifest = SyncManifest(
-            lastSyncTimestamp = System.currentTimeMillis() / 1000,
-            files = finalLocalState,
+            lastSyncTimestamp = Clock.System.now().epochSeconds,
+            files = finalFiles,
         )
 
-        val newManifestBytes = json.encodeToString(manifest).toByteArray()
+        val newManifestBytes = json.encodeToString(manifest).encodeToByteArray()
         syncRepository.uploadFile(
             remoteRoot.resolve(SyncManifest.ProjectRelativePath),
             newManifestBytes,
@@ -148,36 +157,41 @@ class SyncProjectUseCase(
         r: String?,
         b: String?,
     ): SyncFileAction = when {
-        l != null && r == null && b == null -> SyncFileAction.Upload(path)
-        l == null && r != null && b == null -> SyncFileAction.Download(path)
-        l != null && l != b && r != null && r == b -> SyncFileAction.Upload(path)
-        l != null && l == b && r != null && r != b -> SyncFileAction.Download(path)
-        l != null && r == null && b != null -> SyncFileAction.DeleteLocal(path)
-        l == null && r != null && b != null -> SyncFileAction.DeleteRemote(path)
-        l != null && l != b && r != null && r != b -> SyncFileAction.ConflictUpload(path)
-        else -> SyncFileAction.NoOp(path)
+        l == r -> SyncFileAction.NoOp(path)
+        l != null && r == null -> {
+            if (b != null && l == b) SyncFileAction.DeleteLocal(path) else SyncFileAction.Upload(path)
+        }
+        l == null && r != null -> {
+            if (b != null && r == b) SyncFileAction.DeleteRemote(path) else SyncFileAction.Download(path)
+        }
+        r == b -> SyncFileAction.Upload(path)
+        l == b -> SyncFileAction.Download(path)
+        else -> SyncFileAction.ConflictUpload(path)
     }
 
     private suspend fun snapshotLocal(
         project: Project,
     ): Map<String, String> = coroutineScope {
+        val semaphore = Semaphore(MAX_CONCURRENT_LOCAL_READS)
         projectRepository.getProjectFilesList(project).mapNotNull { file ->
             if (file.relativePath == SyncManifest.ProjectRelativePath) {
                 null
             } else {
                 async {
-                    val bytes = projectRepository.readFile(project, file.relativePath)
-                    file.relativePath.toString() to md5(bytes)
+                    semaphore.withPermit {
+                        val bytes = projectRepository.readFile(project, file.relativePath)
+                        file.relativePath.value to md5(bytes)
+                    }
                 }
             }
         }.awaitAll().toMap()
     }
 
-    private suspend fun md5(bytes: ByteArray): String {
-        return md5Provider.hash(bytes).joinToString("") { "%02x".format(it) }
-    }
+    private suspend fun md5(bytes: ByteArray): String =
+        md5Provider.hash(bytes).toHexString()
 
     companion object {
         const val MAX_CONCURRENT_CONNECTIONS = 10
+        const val MAX_CONCURRENT_LOCAL_READS = 4
     }
 }
