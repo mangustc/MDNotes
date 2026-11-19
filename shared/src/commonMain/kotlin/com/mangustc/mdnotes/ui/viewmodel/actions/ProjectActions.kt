@@ -11,40 +11,42 @@ import com.mangustc.mdnotes.domain.usecases.settings.GetSettingsUseCase
 import com.mangustc.mdnotes.domain.usecases.sync.SyncProjectInput
 import com.mangustc.mdnotes.domain.usecases.sync.SyncProjectUseCase
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
+import com.mangustc.mdnotes.ui.util.launchSafe
 import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 class ProjectActions(
     private val deps: AppDeps,
-) : KoinComponent {
-    private val syncProjectUseCase: SyncProjectUseCase by inject()
-    private val loadSavedProjectUseCase: LoadSavedProjectUseCase by inject()
-    private val selectProjectUseCase: SelectProjectUseCase by inject()
-    private val getSettingsUseCase: GetSettingsUseCase by inject()
-    private val syncDatabaseUseCase: SyncDatabaseUseCase by inject()
+    private val syncProjectUseCase: SyncProjectUseCase,
+    private val loadSavedProjectUseCase: LoadSavedProjectUseCase,
+    private val selectProjectUseCase: SelectProjectUseCase,
+    private val getSettingsUseCase: GetSettingsUseCase,
+    private val syncDatabaseUseCase: SyncDatabaseUseCase,
+) {
+    class Factory(
+        private val syncProjectUseCase: SyncProjectUseCase,
+        private val loadSavedProjectUseCase: LoadSavedProjectUseCase,
+        private val selectProjectUseCase: SelectProjectUseCase,
+        private val getSettingsUseCase: GetSettingsUseCase,
+        private val syncDatabaseUseCase: SyncDatabaseUseCase,
+    ) {
+        fun create(deps: AppDeps): ProjectActions = ProjectActions(
+            deps = deps,
+            syncProjectUseCase = syncProjectUseCase,
+            loadSavedProjectUseCase = loadSavedProjectUseCase,
+            selectProjectUseCase = selectProjectUseCase,
+            getSettingsUseCase = getSettingsUseCase,
+            syncDatabaseUseCase = syncDatabaseUseCase,
+        )
+    }
 
     fun onProjectSelected(projectPath: DomainFile) {
-        deps.scope.launch {
-            val project = runUseCase(deps.globalActions::onEvent) {
-                selectProjectUseCase(
-                    SelectProjectInput(
-                        projectPath = projectPath,
-                    ),
-                )
-            }.getOrElse { return@launch }
-            val settings = runUseCase(deps.globalActions::onEvent) {
-                getSettingsUseCase(
-                    GetSettingsInput(
-                        project = project,
-                    ),
-                )
-            }.getOrElse { return@launch }
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = selectProjectUseCase(SelectProjectInput(projectPath = projectPath))
+            val settings = getSettingsUseCase(GetSettingsInput(project = project))
             deps.uiState.update {
                 it.copy(
                     project = project,
@@ -53,38 +55,24 @@ class ProjectActions(
                 )
             }
 
-            runUseCase(deps.globalActions::onEvent) {
-                syncDatabaseUseCase(SyncDatabaseInput(project = project))
-            }
+            syncDatabaseUseCase(SyncDatabaseInput(project = project))
         }
     }
 
     fun loadSavedProject() {
-        deps.scope.launch {
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
             try {
-                val project = runUseCase(deps.globalActions::onEvent) {
-                    loadSavedProjectUseCase(Unit)
-                }.getOrElse { return@launch }
-                if (project != null) {
-                    val settings = runUseCase(deps.globalActions::onEvent) {
-                        getSettingsUseCase(
-                            GetSettingsInput(
-                                project = project,
-                            ),
-                        )
-                    }.getOrElse { return@launch }
-                    deps.uiState.update {
-                        it.copy(
-                            project = project,
-                            settings = settings,
-                            messengerIsLoading = false,
-                        )
-                    }
-
-                    runUseCase(deps.globalActions::onEvent) {
-                        syncDatabaseUseCase(SyncDatabaseInput(project = project))
-                    }
+                val project = loadSavedProjectUseCase(Unit) ?: return@launchSafe
+                val settings = getSettingsUseCase(GetSettingsInput(project = project))
+                deps.uiState.update {
+                    it.copy(
+                        project = project,
+                        settings = settings,
+                        messengerIsLoading = false,
+                    )
                 }
+
+                syncDatabaseUseCase(SyncDatabaseInput(project = project))
             } finally {
                 deps.uiState.update { it.copy(messengerIsLoading = false) }
             }
@@ -95,26 +83,24 @@ class ProjectActions(
     fun syncNow() {
         if (syncJob?.isActive == true) return
 
-        syncJob = deps.scope.launch {
-            val project = deps.uiState.value.project ?: return@launch
-            val settings = deps.uiState.value.settings ?: return@launch
+        syncJob = deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = deps.uiState.value.project ?: return@launchSafe
+            val settings = deps.uiState.value.settings ?: return@launchSafe
 
             try {
                 if (settings.syncProvider == ValidSyncProvider.NONE) {
                     deps.globalActions.onEvent(NotificationEvent.SyncServiceIsNone)
-                    return@launch
+                    return@launchSafe
                 }
 
                 deps.uiState.update { it.copy(isSyncInProgress = true) }
                 deps.globalActions.flushEditorSave()
-                runUseCase(deps.globalActions::onEvent) {
-                    syncProjectUseCase(
-                        SyncProjectInput(
-                            project = project,
-                            settings = settings,
-                        ),
-                    )
-                }.getOrElse { return@launch }
+                syncProjectUseCase(
+                    SyncProjectInput(
+                        project = project,
+                        settings = settings,
+                    ),
+                )
             } finally {
                 deps.uiState.update { it.copy(isSyncInProgress = false) }
 

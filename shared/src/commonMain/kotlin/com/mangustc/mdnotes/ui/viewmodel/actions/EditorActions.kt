@@ -26,6 +26,7 @@ import com.mangustc.mdnotes.domain.usecases.search.ApplySearchEventInput
 import com.mangustc.mdnotes.domain.usecases.search.ApplySearchEventUseCase
 import com.mangustc.mdnotes.domain.usecases.search.SearchEvent
 import com.mangustc.mdnotes.ui.components.ComposeTextState
+import com.mangustc.mdnotes.ui.util.launchSafe
 import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
@@ -44,21 +45,39 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 import kotlin.time.Duration.Companion.seconds
 
 @OptIn(FlowPreview::class)
 class EditorActions(
     private val deps: AppDeps,
-) : KoinComponent {
-    private val getNotesUseCase: GetNotesUseCase by inject()
-    private val getRealSpanInfoLinkTypeUseCase: GetRealSpanInfoLinkTypeUseCase by inject()
-    private val getNoteUseCase: GetNoteUseCase by inject()
-    private val getProjectFileUseCase: GetProjectFileUseCase by inject()
-    private val saveNoteTextUseCase: SaveNoteTextUseCase by inject()
-    private val applyEditorEventUseCase: ApplyEditorEventUseCase by inject()
-    private val applySearchEventUseCase: ApplySearchEventUseCase by inject()
+    private val getNotesUseCase: GetNotesUseCase,
+    private val getRealSpanInfoLinkTypeUseCase: GetRealSpanInfoLinkTypeUseCase,
+    private val getNoteUseCase: GetNoteUseCase,
+    private val getProjectFileUseCase: GetProjectFileUseCase,
+    private val saveNoteTextUseCase: SaveNoteTextUseCase,
+    private val applyEditorEventUseCase: ApplyEditorEventUseCase,
+    private val applySearchEventUseCase: ApplySearchEventUseCase,
+) {
+    class Factory(
+        private val getNotesUseCase: GetNotesUseCase,
+        private val getRealSpanInfoLinkTypeUseCase: GetRealSpanInfoLinkTypeUseCase,
+        private val getNoteUseCase: GetNoteUseCase,
+        private val getProjectFileUseCase: GetProjectFileUseCase,
+        private val saveNoteTextUseCase: SaveNoteTextUseCase,
+        private val applyEditorEventUseCase: ApplyEditorEventUseCase,
+        private val applySearchEventUseCase: ApplySearchEventUseCase,
+    ) {
+        fun create(deps: AppDeps): EditorActions = EditorActions(
+            deps = deps,
+            getNotesUseCase = getNotesUseCase,
+            getRealSpanInfoLinkTypeUseCase = getRealSpanInfoLinkTypeUseCase,
+            getNoteUseCase = getNoteUseCase,
+            getProjectFileUseCase = getProjectFileUseCase,
+            saveNoteTextUseCase = saveNoteTextUseCase,
+            applyEditorEventUseCase = applyEditorEventUseCase,
+            applySearchEventUseCase = applySearchEventUseCase,
+        )
+    }
 
     val state = ComposeTextState()
     val linkSearchState = ComposeTextState()
@@ -82,15 +101,13 @@ class EditorActions(
         .cachedIn(deps.scope)
 
     fun onLinkSearchEvent(event: SearchEvent) {
-        deps.scope.launch {
-            runUseCase(deps.globalActions::onEvent) {
-                applySearchEventUseCase(
-                    ApplySearchEventInput(
-                        event = event,
-                        state = linkSearchState,
-                    ),
-                )
-            }.getOrElse { return@launch }
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            applySearchEventUseCase(
+                ApplySearchEventInput(
+                    event = event,
+                    state = linkSearchState,
+                ),
+            )
         }
     }
 
@@ -178,71 +195,49 @@ class EditorActions(
 
     @OptIn(ExperimentalFoundationApi::class)
     fun onEvent(event: EditorEvent) {
-        deps.scope.launch {
-            val project = deps.uiState.value.project ?: return@launch
-            when (event) {
-                is EditorEvent.InsertNoteLink -> {
-                    runUseCase(deps.globalActions::onEvent) {
-                        applyEditorEventUseCase(
-                            ApplyEditorEventInput(
-                                project = project,
-                                state = state,
-                                event = event,
-                            ),
-                        )
-                    }.getOrElse { return@launch }
-                    dismissLinkNoteDialog()
-                }
-
-                else -> {
-                    runUseCase(deps.globalActions::onEvent) {
-                        applyEditorEventUseCase(
-                            ApplyEditorEventInput(
-                                project = project,
-                                state = state,
-                                event = event,
-                            ),
-                        )
-                    }.getOrElse { return@launch }
-                }
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = deps.uiState.value.project ?: return@launchSafe
+            applyEditorEventUseCase(
+                ApplyEditorEventInput(
+                    project = project,
+                    state = state,
+                    event = event,
+                ),
+            )
+            if (event is EditorEvent.InsertNoteLink) {
+                dismissLinkNoteDialog()
             }
         }
     }
 
     fun openLink(span: SpanInfo.Link) {
-        deps.scope.launch {
-            val project = deps.uiState.value.project ?: return@launch
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = deps.uiState.value.project ?: return@launchSafe
 
-            val realLinkType = runUseCase(deps.globalActions::onEvent) {
-                getRealSpanInfoLinkTypeUseCase(
-                    GetRealSpanInfoLinkTypeInput(
-                        project = project,
-                        span = span,
-                    ),
-                )
-            }.getOrElse { return@launch }
+            val realLinkType = getRealSpanInfoLinkTypeUseCase(
+                GetRealSpanInfoLinkTypeInput(
+                    project = project,
+                    span = span,
+                ),
+            )
             when (realLinkType) {
                 SpanInfo.Link.LinkType.NOTE -> {
-                    val note = runUseCase(deps.globalActions::onEvent) {
-                        getNoteUseCase(
-                            GetNoteInput(
-                                project = project,
-                                relativePath = RelativePath(span.payload),
-                            ),
-                        )
-                    }.getOrElse { return@launch }
+                    val note = getNoteUseCase(
+                        GetNoteInput(
+                            project = project,
+                            relativePath = RelativePath(span.payload),
+                        ),
+                    )
                     deps.globalActions.onEvent(NavigationEvent.GoToEditor(note = note))
                 }
 
                 SpanInfo.Link.LinkType.FILE -> {
-                    val projectFile = runUseCase(deps.globalActions::onEvent) {
-                        getProjectFileUseCase(
-                            GetProjectFileInput(
-                                project = project,
-                                relativePath = RelativePath(span.payload),
-                            ),
-                        )
-                    }.getOrElse { return@launch }
+                    val projectFile = getProjectFileUseCase(
+                        GetProjectFileInput(
+                            project = project,
+                            relativePath = RelativePath(span.payload),
+                        ),
+                    )
                     deps.globalActions.onEvent(NavigationEvent.OpenFile(projectFile.domainFile))
                 }
 

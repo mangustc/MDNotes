@@ -37,6 +37,11 @@ import kotlinx.coroutines.flow.update
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppViewModel(
     private val getAllTagsUseCase: GetAllTagsUseCase,
+    projectActionsFactory: ProjectActions.Factory,
+    settingsActionsFactory: SettingsActions.Factory,
+    drawerActionsFactory: DrawerActions.Factory,
+    editorActionsFactory: EditorActions.Factory,
+    messengerActionsFactory: MessengerActions.Factory,
 ) : ViewModel(), AppGlobalActions {
     private val _uiState = MutableStateFlow(AppUiState())
 
@@ -48,11 +53,11 @@ class AppViewModel(
         )
     }
 
-    val project = ProjectActions(deps)
-    val settings = SettingsActions(deps)
-    val drawer = DrawerActions(deps)
-    val editor = EditorActions(deps)
-    val messenger = MessengerActions(deps)
+    val project = projectActionsFactory.create(deps)
+    val settings = settingsActionsFactory.create(deps)
+    val drawer = drawerActionsFactory.create(deps)
+    val editor = editorActionsFactory.create(deps)
+    val messenger = messengerActionsFactory.create(deps)
 
     private val allProjectTagsFlow: Flow<List<String>> = _uiState
         .map { it.project }

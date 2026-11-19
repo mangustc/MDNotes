@@ -14,6 +14,7 @@ import com.mangustc.mdnotes.domain.usecases.messenger.SendNoteInput
 import com.mangustc.mdnotes.domain.usecases.messenger.SendNoteUseCase
 import com.mangustc.mdnotes.domain.usecases.notes.DeleteNoteInput
 import com.mangustc.mdnotes.domain.usecases.notes.DeleteNoteUseCase
+import com.mangustc.mdnotes.ui.util.launchSafe
 import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.ClipboardEvent
@@ -28,17 +29,31 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 class MessengerActions(
     private val deps: AppDeps,
-) : KoinComponent {
-    private val getMessagesUseCase: GetMessagesUseCase by inject()
-    private val getPinnedMessagesUseCase: GetPinnedMessagesUseCase by inject()
-    private val deleteNoteUseCase: DeleteNoteUseCase by inject()
-    private val getLinkPreviewUseCase: GetLinkPreviewUseCase by inject()
-    private val sendNoteUseCase: SendNoteUseCase by inject()
+    private val getMessagesUseCase: GetMessagesUseCase,
+    private val getPinnedMessagesUseCase: GetPinnedMessagesUseCase,
+    private val deleteNoteUseCase: DeleteNoteUseCase,
+    private val getLinkPreviewUseCase: GetLinkPreviewUseCase,
+    private val sendNoteUseCase: SendNoteUseCase,
+) {
+    class Factory(
+        private val getMessagesUseCase: GetMessagesUseCase,
+        private val getPinnedMessagesUseCase: GetPinnedMessagesUseCase,
+        private val deleteNoteUseCase: DeleteNoteUseCase,
+        private val getLinkPreviewUseCase: GetLinkPreviewUseCase,
+        private val sendNoteUseCase: SendNoteUseCase,
+    ) {
+        fun create(deps: AppDeps): MessengerActions = MessengerActions(
+            deps = deps,
+            getMessagesUseCase = getMessagesUseCase,
+            getPinnedMessagesUseCase = getPinnedMessagesUseCase,
+            deleteNoteUseCase = deleteNoteUseCase,
+            getLinkPreviewUseCase = getLinkPreviewUseCase,
+            sendNoteUseCase = sendNoteUseCase,
+        )
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val notesPaged: Flow<PagingData<MessageBody>> = deps.uiState
@@ -94,25 +109,23 @@ class MessengerActions(
         attachments: List<Attachment> = emptyList(),
         afterUpdate: () -> Unit = {},
     ) {
-        deps.scope.launch {
-            val project = deps.uiState.value.project ?: return@launch
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = deps.uiState.value.project ?: return@launchSafe
             val text = deps.uiState.value.messengerNewNoteText.trim()
 
-            runUseCase(deps.globalActions::onEvent) {
-                sendNoteUseCase(
-                    SendNoteInput(
-                        project = project,
-                        body = text,
-                        attachments = attachments,
-                        editNote = if (isEditedNote) {
-                            deps.uiState.value.messengerEditingNote ?: return@launch
-                        } else {
-                            if (text.isBlank() && attachments.isEmpty()) return@launch
-                            null
-                        },
-                    ),
-                )
-            }.getOrElse { return@launch }
+            sendNoteUseCase(
+                SendNoteInput(
+                    project = project,
+                    body = text,
+                    attachments = attachments,
+                    editNote = if (isEditedNote) {
+                        deps.uiState.value.messengerEditingNote ?: return@launchSafe
+                    } else {
+                        if (text.isBlank() && attachments.isEmpty()) return@launchSafe
+                        null
+                    },
+                ),
+            )
 
             deps.uiState.update { state ->
                 state.copy(
@@ -137,14 +150,8 @@ class MessengerActions(
         }
         if (!shouldFetch) return
 
-        deps.scope.launch {
-            val preview = runUseCase(deps.globalActions::onEvent) {
-                getLinkPreviewUseCase(
-                    GetLinkPreviewInput(
-                        url = url,
-                    ),
-                )
-            }.getOrElse { return@launch }
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val preview = getLinkPreviewUseCase(GetLinkPreviewInput(url = url))
             if (preview != null) {
                 deps.uiState.update {
                     it.copy(messengerLinkPreviews = it.messengerLinkPreviews + (url to preview))

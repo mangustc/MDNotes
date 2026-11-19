@@ -4,19 +4,25 @@ import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.usecases.settings.SetSettingsInput
 import com.mangustc.mdnotes.domain.usecases.settings.SetSettingsUseCase
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
-import com.mangustc.mdnotes.ui.util.runUseCase
+import com.mangustc.mdnotes.ui.util.launchSafe
 import com.mangustc.mdnotes.ui.viewmodel.ActiveDialog
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
 
 class SettingsActions(
     private val deps: AppDeps,
-) : KoinComponent {
-    private val setSettingsUseCase: SetSettingsUseCase by inject()
+    private val setSettingsUseCase: SetSettingsUseCase,
+) {
+    class Factory(
+        private val setSettingsUseCase: SetSettingsUseCase,
+    ) {
+        fun create(deps: AppDeps): SettingsActions = SettingsActions(
+            deps = deps,
+            setSettingsUseCase = setSettingsUseCase,
+        )
+    }
 
     fun showSettings() {
         deps.uiState.update { it.copy(activeDialog = ActiveDialog.Settings) }
@@ -62,16 +68,15 @@ class SettingsActions(
         }
     }
 
-    private fun updateSettings(newSettings: Settings) = deps.scope.launch {
-        val project = deps.uiState.value.project ?: return@launch
-        deps.uiState.update { it.copy(settings = newSettings) }
-        runUseCase(deps.globalActions::onEvent) {
+    private fun updateSettings(newSettings: Settings) =
+        deps.scope.launchSafe(deps.globalActions::onEvent) {
+            val project = deps.uiState.value.project ?: return@launchSafe
+            deps.uiState.update { it.copy(settings = newSettings) }
             setSettingsUseCase(
                 SetSettingsInput(
                     project = project,
                     newSettings = newSettings,
                 ),
             )
-        }.getOrElse { return@launch }
-    }
+        }
 }
