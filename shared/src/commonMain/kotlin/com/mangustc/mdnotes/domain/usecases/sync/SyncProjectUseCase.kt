@@ -159,11 +159,17 @@ class SyncProjectUseCase(
     ): SyncFileAction = when {
         l == r -> SyncFileAction.NoOp(path)
         l != null && r == null -> {
-            if (b != null && l == b) SyncFileAction.DeleteLocal(path) else SyncFileAction.Upload(path)
+            if (b != null && l == b) SyncFileAction.DeleteLocal(path) else SyncFileAction.Upload(
+                path
+            )
         }
+
         l == null && r != null -> {
-            if (b != null && r == b) SyncFileAction.DeleteRemote(path) else SyncFileAction.Download(path)
+            if (b != null && r == b) SyncFileAction.DeleteRemote(path) else SyncFileAction.Download(
+                path
+            )
         }
+
         r == b -> SyncFileAction.Upload(path)
         l == b -> SyncFileAction.Download(path)
         else -> SyncFileAction.ConflictUpload(path)
