@@ -28,6 +28,7 @@ import com.mangustc.mdnotes.ui.components.ComposeTextState
 import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
@@ -225,6 +226,8 @@ class EditorActions(
                     replace(0, length, body)
                 }
                 state.undoState.clearHistory()
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 deps.globalActions.onEvent(NavigationEvent.GoBack)
             }

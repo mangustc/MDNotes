@@ -11,6 +11,7 @@ import com.mangustc.mdnotes.domain.usecases.UseCase
 import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.DelicateCryptographyApi
 import dev.whyoleg.cryptography.algorithms.MD5
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,11 +51,15 @@ class SyncProjectUseCase(
             files = snapshotLocal(project),
         )
 
-        val baseManifest = runCatching {
+        val baseManifest = try {
             projectRepository.readFile(project, SyncManifest.ProjectRelativePath).let {
                 json.decodeFromString<SyncManifest>(it.decodeToString())
             }
-        }.getOrNull() ?: SyncManifest.Empty
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: SyncManifest.Empty
 
         val remoteManifest =
             syncRepository.downloadFile(remoteRoot.resolve(SyncManifest.ProjectRelativePath))

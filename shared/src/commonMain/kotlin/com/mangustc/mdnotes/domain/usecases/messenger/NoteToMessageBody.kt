@@ -7,6 +7,7 @@ import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.ProjectFile
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SpanInfo
+import kotlinx.coroutines.CancellationException
 
 suspend fun Note.toMessageBody(
     getProjectFile: suspend (RelativePath) -> ProjectFile,
@@ -23,6 +24,8 @@ suspend fun Note.toMessageBody(
         }
         val projectFile = try {
             getProjectFile(RelativePath(payload))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             attachments.add(

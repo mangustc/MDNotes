@@ -9,6 +9,7 @@ import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.bookmarkData
 import io.github.vinceglb.filekit.exists
 import io.github.vinceglb.filekit.fromBookmarkData
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -56,6 +57,8 @@ class CommonSettingsRepository(
                 prefs.remove(KEY_PROJECT_URI)
                 null
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             prefs.remove(KEY_PROJECT_URI)
             null

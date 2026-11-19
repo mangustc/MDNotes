@@ -21,6 +21,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.encodeURLQueryComponent
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -57,6 +58,8 @@ class YandexSyncRepository(
         withContext(Dispatchers.IO) {
             try {
                 tryUploadFile(path, bytes)
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 ensureDirectories(path)
                 tryUploadFile(path, bytes)
@@ -136,6 +139,8 @@ class YandexSyncRepository(
     private suspend inline fun <T> runNetwork(crossinline block: suspend () -> T): T {
         return try {
             block()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (e is SyncException) throw e
             throw SyncNetworkException()

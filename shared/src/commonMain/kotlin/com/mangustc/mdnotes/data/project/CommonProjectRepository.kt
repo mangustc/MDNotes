@@ -35,6 +35,7 @@ import io.github.vinceglb.filekit.nameWithoutExtension
 import io.github.vinceglb.filekit.readBytes
 import io.github.vinceglb.filekit.readString
 import io.github.vinceglb.filekit.write
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -86,6 +87,8 @@ class CommonProjectRepository(
         val file = getFile(project, relativePath)
         val fullText = try {
             file.file.readString()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw FileNotReadableException(relativePath.value, e)
         }
@@ -138,6 +141,8 @@ class CommonProjectRepository(
             ) {
                 val fullText = try {
                     file.file.readString()
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     throw FileNotReadableException(file.name, e)
                 }
@@ -202,6 +207,8 @@ class CommonProjectRepository(
         withContext(Dispatchers.IO) {
             val bytes = try {
                 fromPath.file.readBytes()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 throw FileNotReadableException(fromPath.name, e)
             }
@@ -252,6 +259,8 @@ class CommonProjectRepository(
                         parent.let {
                             if (!it.exists()) it.createDirectories()
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         throw FileNotWritableException(relativePath.value, e)
                     }
@@ -262,6 +271,8 @@ class CommonProjectRepository(
 
         try {
             file.write(byteArray)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw FileNotWritableException(relativePath.value, e)
         }
@@ -332,6 +343,8 @@ class CommonProjectRepository(
 
         try {
             file.file.readBytes()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             throw FileNotReadableException(relativePath.value, e)
         }
