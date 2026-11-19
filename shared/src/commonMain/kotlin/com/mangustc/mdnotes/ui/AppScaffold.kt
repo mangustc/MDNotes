@@ -64,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
@@ -145,11 +146,12 @@ fun AppScaffold(
     val focusManager = LocalFocusManager.current
     val uriHandler = LocalUriHandler.current
 
-    LaunchedEffect(isLargeScreen) {
+    val currentIsLargeScreen by rememberUpdatedState(isLargeScreen)
+    LaunchedEffect(Unit) {
         appViewModel.navigationEvents.collect {
             when (it) {
                 is NavigationEvent.GoToEditor -> {
-                    if (!isLargeScreen) drawerState.close()
+                    if (!currentIsLargeScreen) drawerState.close()
                     navController.navigate(EditorDestination(it.note.projectFile.relativePath.value))
                 }
 
