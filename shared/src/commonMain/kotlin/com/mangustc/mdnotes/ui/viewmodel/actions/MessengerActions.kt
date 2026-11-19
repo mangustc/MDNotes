@@ -125,8 +125,19 @@ class MessengerActions(
     }
 
     fun ensureLinkPreview(url: String) {
+        var shouldFetch = false
+        deps.uiState.update { state ->
+            if (state.messengerLinkPreviews.containsKey(url)) {
+                shouldFetch = false
+                state
+            } else {
+                shouldFetch = true
+                state.copy(messengerLinkPreviews = state.messengerLinkPreviews + (url to null))
+            }
+        }
+        if (!shouldFetch) return
+
         deps.scope.launch {
-            if (deps.uiState.value.messengerLinkPreviews.containsKey(url)) return@launch
             val preview = runUseCase(deps.globalActions::onEvent) {
                 getLinkPreviewUseCase(
                     GetLinkPreviewInput(
