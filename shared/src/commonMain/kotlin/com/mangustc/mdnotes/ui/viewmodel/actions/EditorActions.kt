@@ -36,13 +36,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(FlowPreview::class)
 class EditorActions(
@@ -90,16 +94,66 @@ class EditorActions(
         }
     }
 
+    private val editorMutex = Mutex()
+    private var lastSavedBodyRef: CharSequence? = null
+    private var currentFmVersion: Long = 0L
+    private var savedFmVersion: Long = 0L
+    private var activeSessionRoutePath: RelativePath? = null
+
     fun onCloseEditor() {
-        onSave()
         deps.scope.launch {
+            editorMutex.withLock {
+                flushSaveLocked()
+                clearSessionLocked()
+            }
             deps.globalActions.onEvent(NavigationEvent.GoBack)
-            deps.uiState.update {
-                it.copy(
-                    isLinkNoteDialogVisible = false,
-                    activeNote = null,
-                    editorFrontMatter = null,
-                )
+        }
+    }
+
+    fun onEditorDisposed(routePath: RelativePath) {
+        deps.scope.launch {
+            editorMutex.withLock {
+                if (activeSessionRoutePath == routePath) {
+                    flushSaveLocked()
+                    clearSessionLocked()
+                }
+            }
+        }
+    }
+
+    fun saveNow() {
+        deps.scope.launch {
+            flushSave()
+        }
+    }
+
+    suspend fun flushSave() {
+        editorMutex.withLock {
+            flushSaveLocked()
+        }
+    }
+
+    suspend fun onNoteDeleted(notePath: RelativePath) {
+        editorMutex.withLock {
+            if (deps.uiState.value.activeNote?.projectFile?.relativePath == notePath) {
+                clearSessionLocked()
+            }
+        }
+    }
+
+    suspend fun onNoteRenamed(oldPath: RelativePath, renamedNote: Note) {
+        editorMutex.withLock {
+            if (deps.uiState.value.activeNote?.projectFile?.relativePath == oldPath) {
+                deps.uiState.update { it.copy(activeNote = renamedNote) }
+            }
+        }
+    }
+
+    suspend fun onNoteFrontMatterUpdated(notePath: RelativePath, frontMatter: FrontMatter) {
+        editorMutex.withLock {
+            if (deps.uiState.value.activeNote?.projectFile?.relativePath == notePath) {
+                deps.uiState.update { it.copy(editorFrontMatter = frontMatter) }
+                savedFmVersion = currentFmVersion
             }
         }
     }
@@ -116,8 +170,9 @@ class EditorActions(
     init {
         deps.scope.launch {
             snapshotFlow { state.text }
-                .debounce(2_000)
-                .collect { onSave() }
+                .drop(1)
+                .debounce(2.seconds)
+                .collect { flushSave() }
         }
     }
 
@@ -201,125 +256,136 @@ class EditorActions(
     @OptIn(ExperimentalFoundationApi::class)
     fun onNoteOpened(notePath: RelativePath) {
         deps.scope.launch {
-            try {
-                val project = deps.uiState.value.project ?: throw Exception()
-                val note = runUseCase(deps.globalActions::onEvent) {
-                    getNoteUseCase(
-                        GetNoteInput(
-                            project = project,
-                            relativePath = notePath,
-                            includeText = true,
-                            includeFrontMatter = true,
-                        ),
+            editorMutex.withLock {
+                flushSaveLocked()
+                try {
+                    val project = deps.uiState.value.project ?: throw Exception()
+                    val note = runUseCase(deps.globalActions::onEvent) {
+                        getNoteUseCase(
+                            GetNoteInput(
+                                project = project,
+                                relativePath = notePath,
+                                includeText = true,
+                                includeFrontMatter = true,
+                            ),
+                        )
+                    }.getOrElse { return@withLock }
+                    val (frontMatter, body) = NoteDocument.parse(
+                        note.body ?: throw Exception(),
                     )
-                }.getOrElse { return@launch }
-                val (frontMatter, body) = NoteDocument.parse(
-                    note.body ?: throw Exception(),
-                )
-                deps.uiState.update {
-                    it.copy(
-                        activeNote = note,
-                        editorFrontMatter = frontMatter,
-                        isViewingMode = true,
-                    )
+                    state.edit {
+                        replace(0, length, body)
+                    }
+                    state.undoState.clearHistory()
+                    lastSavedBodyRef = state.text
+                    savedFmVersion = currentFmVersion
+                    activeSessionRoutePath = notePath
+                    deps.uiState.update {
+                        it.copy(
+                            activeNote = note,
+                            editorFrontMatter = frontMatter,
+                            isViewingMode = true,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    deps.globalActions.onEvent(NavigationEvent.GoBack)
                 }
-                state.edit {
-                    replace(0, length, body)
-                }
-                state.undoState.clearHistory()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                deps.globalActions.onEvent(NavigationEvent.GoBack)
             }
         }
     }
 
     fun updateFmKey(oldKey: String, newKey: String) {
         if (oldKey == newKey || newKey.isBlank()) return
-        deps.uiState.update {
-            it.copy(
-                editorFrontMatter = it.editorFrontMatter?.withRenamedKey(
-                    oldKey,
-                    newKey,
-                ),
-            )
-        }
-        onSave()
+        updateFrontMatter { it?.withRenamedKey(oldKey, newKey) }
     }
 
     fun updateFmValue(key: String, value: String) {
-        deps.uiState.update {
-            it.copy(
-                editorFrontMatter = it.editorFrontMatter?.withField(
-                    key,
-                    FrontMatter.FrontMatterValue.Scalar(value),
-                ),
-            )
+        updateFrontMatter {
+            it?.withField(key, FrontMatter.FrontMatterValue.Scalar(value))
         }
-        onSave()
     }
 
     fun addFmProperty() {
-        val fm = deps.uiState.value.editorFrontMatter ?: FrontMatter.Empty
-        var newKey = "newProperty"
-        var count = 1
-        while (fm.fields.containsKey(newKey)) {
-            newKey = "newProperty$count"
-            count++
+        updateFrontMatter { current ->
+            val fm = current ?: FrontMatter.Empty
+            var newKey = "newProperty"
+            var count = 1
+            while (fm.fields.containsKey(newKey)) {
+                newKey = "newProperty$count"
+                count++
+            }
+            fm.withField(newKey, FrontMatter.FrontMatterValue.Scalar(""))
         }
-        deps.uiState.update {
-            it.copy(
-                editorFrontMatter = fm.withField(
-                    newKey,
-                    FrontMatter.FrontMatterValue.Scalar(""),
-                ),
-            )
-        }
-        onSave()
     }
 
     fun addFmTag(tag: String) {
-        deps.uiState.update { it.copy(editorFrontMatter = it.editorFrontMatter?.withTag(tag)) }
-        onSave()
+        updateFrontMatter { it?.withTag(tag) }
     }
 
     fun removeFmTag(tag: String) {
-        deps.uiState.update { it.copy(editorFrontMatter = it.editorFrontMatter?.withoutTag(tag)) }
-        onSave()
+        updateFrontMatter { it?.withoutTag(tag) }
     }
 
     fun removeFmProperty(key: String) {
-        deps.uiState.update { it.copy(editorFrontMatter = it.editorFrontMatter?.withoutField(key)) }
-        onSave()
+        updateFrontMatter { it?.withoutField(key) }
     }
 
     fun toggleViewingMode() {
         deps.uiState.update { it.copy(isViewingMode = !it.isViewingMode) }
     }
 
-    private fun onSave() {
+    private fun updateFrontMatter(transform: (FrontMatter?) -> FrontMatter?) {
         deps.scope.launch {
-            val project = deps.uiState.value.project ?: return@launch
-            val note = deps.uiState.value.activeNote ?: return@launch
-            val bodyText = state.text.toString()
-            val fm = deps.uiState.value.editorFrontMatter
-
-            val textToSave = NoteDocument(
-                frontMatter = fm ?: FrontMatter.Empty,
-                body = bodyText,
-            ).serialize()
-
-            runUseCase(deps.globalActions::onEvent) {
-                saveNoteTextUseCase(
-                    SaveNoteTextInput(
-                        project = project,
-                        note = note,
-                        text = textToSave,
-                    ),
-                )
-            }.getOrElse { return@launch }
-            deps.uiState.update { it.copy(editorSavedVersion = it.editorVersion) }
+            editorMutex.withLock {
+                deps.uiState.update {
+                    it.copy(editorFrontMatter = transform(it.editorFrontMatter))
+                }
+                currentFmVersion++
+                flushSaveLocked()
+            }
         }
+    }
+
+    private fun clearSessionLocked() {
+        activeSessionRoutePath = null
+        lastSavedBodyRef = null
+        savedFmVersion = currentFmVersion
+        deps.uiState.update {
+            it.copy(
+                isLinkNoteDialogVisible = false,
+                activeNote = null,
+                editorFrontMatter = null,
+            )
+        }
+    }
+
+    private suspend fun flushSaveLocked() {
+        val project = deps.uiState.value.project ?: return
+        val note = deps.uiState.value.activeNote ?: return
+        val currentBodyRef = state.text
+        val isBodyDirty = currentBodyRef !== lastSavedBodyRef
+        val isFmDirty = currentFmVersion != savedFmVersion
+        if (!isBodyDirty && !isFmDirty) return
+
+        val fmVersionToSave = currentFmVersion
+        val fm = deps.uiState.value.editorFrontMatter
+        val textToSave = NoteDocument(
+            frontMatter = fm ?: FrontMatter.Empty,
+            body = currentBodyRef.toString(),
+        ).serialize()
+
+        runUseCase(deps.globalActions::onEvent) {
+            saveNoteTextUseCase(
+                SaveNoteTextInput(
+                    project = project,
+                    note = note,
+                    text = textToSave,
+                ),
+            )
+        }.getOrElse { return }
+        lastSavedBodyRef = currentBodyRef
+        savedFmVersion = fmVersionToSave
     }
 }

@@ -106,6 +106,7 @@ class ProjectActions(
                 }
 
                 deps.uiState.update { it.copy(isSyncInProgress = true) }
+                deps.globalActions.flushEditorSave()
                 runUseCase(deps.globalActions::onEvent) {
                     syncProjectUseCase(
                         SyncProjectInput(

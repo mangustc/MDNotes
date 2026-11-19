@@ -27,10 +27,6 @@ data class AppUiState(
 
     val isLinkNoteDialogVisible: Boolean = false,
     val editorFrontMatter: FrontMatter? = null,
-    val editorCanUndo: Boolean = false,
-    val editorCanRedo: Boolean = false,
-    val editorVersion: Int = 0,
-    val editorSavedVersion: Int = 0,
     val isViewingMode: Boolean = true,
 
     val messengerIsLoading: Boolean = true,

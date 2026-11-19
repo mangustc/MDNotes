@@ -3,6 +3,9 @@ package com.mangustc.mdnotes.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mangustc.mdnotes.domain.models.Attachment
+import com.mangustc.mdnotes.domain.models.FrontMatter
+import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsInput
 import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsUseCase
 import com.mangustc.mdnotes.ui.viewmodel.actions.DrawerActions
@@ -106,6 +109,25 @@ class AppViewModel(
             is ClipboardEvent -> _clipboardEvents.trySend(event)
             is FocusEvent -> _focusEvents.trySend(event)
         }
+    }
+
+    override suspend fun flushEditorSave() {
+        editor.flushSave()
+    }
+
+    override suspend fun onNoteDeleted(notePath: RelativePath) {
+        editor.onNoteDeleted(notePath)
+    }
+
+    override suspend fun onNoteRenamed(oldPath: RelativePath, renamedNote: Note) {
+        editor.onNoteRenamed(oldPath, renamedNote)
+    }
+
+    override suspend fun onNoteFrontMatterUpdated(
+        notePath: RelativePath,
+        frontMatter: FrontMatter,
+    ) {
+        editor.onNoteFrontMatterUpdated(notePath, frontMatter)
     }
 
     fun onShareIntent(text: String?, attachments: List<Attachment>) {

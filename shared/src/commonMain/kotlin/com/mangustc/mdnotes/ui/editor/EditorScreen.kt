@@ -66,6 +66,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -101,6 +102,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import coil3.compose.AsyncImage
@@ -156,6 +159,16 @@ fun EditorScreen(
 
     LaunchedEffect(noteRelativePath) {
         viewModel.editor.onNoteOpened(RelativePath(noteRelativePath))
+    }
+
+    DisposableEffect(noteRelativePath) {
+        onDispose {
+            viewModel.editor.onEditorDisposed(RelativePath(noteRelativePath))
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        viewModel.editor.saveNow()
     }
 
     val editorSpans by remember {

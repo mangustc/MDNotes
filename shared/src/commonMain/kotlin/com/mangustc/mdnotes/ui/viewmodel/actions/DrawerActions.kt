@@ -122,6 +122,11 @@ class DrawerActions(
     fun onDeleteNote(note: Note) {
         deps.scope.launch {
             val project = deps.uiState.value.project ?: return@launch
+            val isDeletingActive =
+                note.projectFile.relativePath == deps.uiState.value.activeNote?.projectFile?.relativePath
+            if (isDeletingActive) {
+                deps.globalActions.onNoteDeleted(note.projectFile.relativePath)
+            }
             runUseCase(deps.globalActions::onEvent) {
                 deleteNoteUseCase(
                     DeleteNoteInput(
@@ -131,9 +136,9 @@ class DrawerActions(
                 )
             }.getOrElse { return@launch }
 
-            val activeNote = deps.uiState.value.activeNote
-            if (note.projectFile.relativePath == activeNote?.projectFile?.relativePath)
+            if (isDeletingActive) {
                 deps.globalActions.onEvent(NavigationEvent.GoBack)
+            }
         }
     }
 
@@ -168,7 +173,11 @@ class DrawerActions(
     fun onRenameNote(note: Note, newName: String) {
         deps.scope.launch {
             val project = deps.uiState.value.project ?: return@launch
-            runUseCase(deps.globalActions::onEvent) {
+            val oldPath = note.projectFile.relativePath
+            if (oldPath == deps.uiState.value.activeNote?.projectFile?.relativePath) {
+                deps.globalActions.flushEditorSave()
+            }
+            val renamedNote = runUseCase(deps.globalActions::onEvent) {
                 renameNoteUseCase(
                     RenameNoteInput(
                         project = project,
@@ -177,13 +186,18 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
+            deps.globalActions.onNoteRenamed(oldPath, renamedNote)
         }
     }
 
     fun onPinNote(note: Note) {
         deps.scope.launch {
             val project = deps.uiState.value.project ?: return@launch
-            runUseCase(deps.globalActions::onEvent) {
+            val notePath = note.projectFile.relativePath
+            if (notePath == deps.uiState.value.activeNote?.projectFile?.relativePath) {
+                deps.globalActions.flushEditorSave()
+            }
+            val updatedFrontMatter = runUseCase(deps.globalActions::onEvent) {
                 toggleNoteTagUseCase(
                     ToggleNoteTagInput(
                         project = project,
@@ -192,6 +206,7 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
+            deps.globalActions.onNoteFrontMatterUpdated(notePath, updatedFrontMatter)
         }
     }
 }
