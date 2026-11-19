@@ -95,6 +95,7 @@ import com.mangustc.mdnotes.ui.navigation.MessengerDestination
 import com.mangustc.mdnotes.ui.settings.SettingsDialog
 import com.mangustc.mdnotes.ui.util.clipEntryOf
 import com.mangustc.mdnotes.ui.util.onNotificationToast
+import com.mangustc.mdnotes.ui.viewmodel.ActiveDialog
 import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.ClipboardEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
@@ -560,52 +561,61 @@ fun AppScaffold(
         }
     }
 
-    if (uiState.isCreateNoteDialogVisible) {
-        CreateNoteDialog(
-            onDismissRequest = { appViewModel.drawer.dismissCreateNoteDialog() },
-            onConfirmCreate = {
-                appViewModel.drawer.onCreateNote()
-                appViewModel.drawer.dismissCreateNoteDialog()
-            },
-            initialName = uiState.newNoteNameInput,
-            onNameChange = { newName -> appViewModel.drawer.updateNewNoteName(newName) },
-        )
-    }
-    if (uiState.isNoteDeleteDialogVisible && uiState.dialogNote != null) {
-        DeleteNoteDialog(
-            onDismissRequest = { appViewModel.drawer.dismissNoteDeleteDialog() },
-            onConfirmDelete = {
-                appViewModel.drawer.onDeleteNote(uiState.dialogNote!!)
-                appViewModel.drawer.dismissNoteDeleteDialog()
-            },
-            noteName = uiState.dialogNote!!.name,
-        )
-    }
-    if (uiState.isNoteRenameDialogVisible && uiState.dialogNote != null) {
-        RenameNoteDialog(
-            onDismissRequest = { appViewModel.drawer.dismissNoteRenameDialog() },
-            onConfirmRename = {
-                appViewModel.drawer.onRenameNote(uiState.dialogNote!!, uiState.noteRenameInput)
-                appViewModel.drawer.dismissNoteRenameDialog()
-            },
-            name = uiState.noteRenameInput,
-            onNameChange = { newName -> appViewModel.drawer.onRenameNameInputChanged(newName) },
-        )
-    }
-    if (uiState.isNoteShowInfoDialogVisible && uiState.dialogNote != null) {
-        ShowInfoDialog(
-            onDismissRequest = { appViewModel.drawer.dismissNoteShowInfoDialog() },
-            note = uiState.dialogNote!!,
-        )
-    }
-    if (uiState.isSettingsDialogVisible && uiState.settings != null) {
-        SettingsDialog(
-            onDismissRequest = { appViewModel.settings.dismissSettings() },
-            settings = uiState.settings!!,
-            openYandexLink = appViewModel.settings::openYandexLink,
-            onReverseLayoutChange = appViewModel.settings::setReverseLayout,
-            onSyncProviderChange = appViewModel.settings::setSyncProvider,
-            onOauthTokenChange = appViewModel.settings::setYandexOauthToken,
-        )
+    when (val dialog = uiState.activeDialog) {
+        ActiveDialog.None -> Unit
+        is ActiveDialog.CreateNote -> {
+            CreateNoteDialog(
+                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onConfirmCreate = {
+                    appViewModel.drawer.onCreateNote(dialog.nameInput)
+                    appViewModel.drawer.dismissDialog()
+                },
+                initialName = dialog.nameInput,
+                onNameChange = { newName -> appViewModel.drawer.updateNewNoteName(newName) },
+            )
+        }
+
+        is ActiveDialog.DeleteNote -> {
+            DeleteNoteDialog(
+                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onConfirmDelete = {
+                    appViewModel.drawer.onDeleteNote(dialog.note)
+                    appViewModel.drawer.dismissDialog()
+                },
+                noteName = dialog.note.name,
+            )
+        }
+
+        is ActiveDialog.RenameNote -> {
+            RenameNoteDialog(
+                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onConfirmRename = {
+                    appViewModel.drawer.onRenameNote(dialog.note, dialog.nameInput)
+                    appViewModel.drawer.dismissDialog()
+                },
+                name = dialog.nameInput,
+                onNameChange = { newName -> appViewModel.drawer.onRenameNameInputChanged(newName) },
+            )
+        }
+
+        is ActiveDialog.ShowInfo -> {
+            ShowInfoDialog(
+                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                note = dialog.note,
+            )
+        }
+
+        ActiveDialog.Settings -> {
+            uiState.settings?.let { settings ->
+                SettingsDialog(
+                    onDismissRequest = { appViewModel.settings.dismissSettings() },
+                    settings = settings,
+                    openYandexLink = appViewModel.settings::openYandexLink,
+                    onReverseLayoutChange = appViewModel.settings::setReverseLayout,
+                    onSyncProviderChange = appViewModel.settings::setSyncProvider,
+                    onOauthTokenChange = appViewModel.settings::setYandexOauthToken,
+                )
+            }
+        }
     }
 }

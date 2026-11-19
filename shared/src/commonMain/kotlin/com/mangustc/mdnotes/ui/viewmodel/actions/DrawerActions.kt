@@ -20,6 +20,7 @@ import com.mangustc.mdnotes.domain.usecases.search.ApplySearchEventUseCase
 import com.mangustc.mdnotes.domain.usecases.search.SearchEvent
 import com.mangustc.mdnotes.ui.components.ComposeTextState
 import com.mangustc.mdnotes.ui.util.runUseCase
+import com.mangustc.mdnotes.ui.viewmodel.ActiveDialog
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -82,22 +83,24 @@ class DrawerActions(
         deps.globalActions.onEvent(NavigationEvent.GoToEditor(note = note))
     }
 
-    fun showCreateNoteDialog() {
-        deps.uiState.update { it.copy(isCreateNoteDialogVisible = true) }
+    fun dismissDialog() {
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.None) }
     }
 
-    fun dismissCreateNoteDialog() {
-        deps.uiState.update { it.copy(isCreateNoteDialogVisible = false, newNoteNameInput = "") }
+    fun showCreateNoteDialog() {
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.CreateNote()) }
     }
 
     fun updateNewNoteName(name: String) {
-        deps.uiState.update { it.copy(newNoteNameInput = name) }
+        deps.uiState.update { state ->
+            val dialog = state.activeDialog as? ActiveDialog.CreateNote ?: return@update state
+            state.copy(activeDialog = dialog.copy(nameInput = name))
+        }
     }
 
-    fun onCreateNote() {
+    fun onCreateNote(name: String) {
         deps.scope.launch {
             val project = deps.uiState.value.project ?: return@launch
-            val name = deps.uiState.value.newNoteNameInput
             val note = runUseCase(deps.globalActions::onEvent) {
                 createNoteUseCase(
                     CreateNoteInput(
@@ -112,11 +115,7 @@ class DrawerActions(
     }
 
     fun showNoteDeleteDialog(note: Note) {
-        deps.uiState.update { it.copy(isNoteDeleteDialogVisible = true, dialogNote = note) }
-    }
-
-    fun dismissNoteDeleteDialog() {
-        deps.uiState.update { it.copy(isNoteDeleteDialogVisible = false, dialogNote = null) }
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.DeleteNote(note)) }
     }
 
     fun onDeleteNote(note: Note) {
@@ -143,31 +142,25 @@ class DrawerActions(
     }
 
     fun showNoteShowInfoDialog(note: Note) {
-        deps.uiState.update { it.copy(isNoteShowInfoDialogVisible = true, dialogNote = note) }
-    }
-
-    fun dismissNoteShowInfoDialog() {
-        deps.uiState.update { it.copy(isNoteShowInfoDialogVisible = false, dialogNote = null) }
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.ShowInfo(note)) }
     }
 
     fun showNoteRenameDialog(note: Note) {
         deps.uiState.update {
             it.copy(
-                isNoteRenameDialogVisible = true,
-                noteRenameInput = note.name,
-                dialogNote = note,
+                activeDialog = ActiveDialog.RenameNote(
+                    note = note,
+                    nameInput = note.name,
+                ),
             )
         }
     }
 
-    fun dismissNoteRenameDialog() {
-        deps.uiState.update {
-            it.copy(isNoteRenameDialogVisible = false, noteRenameInput = "", dialogNote = null)
-        }
-    }
-
     fun onRenameNameInputChanged(newName: String) {
-        deps.uiState.update { it.copy(noteRenameInput = newName) }
+        deps.uiState.update { state ->
+            val dialog = state.activeDialog as? ActiveDialog.RenameNote ?: return@update state
+            state.copy(activeDialog = dialog.copy(nameInput = newName))
+        }
     }
 
     fun onRenameNote(note: Note, newName: String) {

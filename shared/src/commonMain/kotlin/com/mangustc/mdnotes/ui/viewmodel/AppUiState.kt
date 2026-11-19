@@ -8,6 +8,15 @@ import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.Settings
 
+sealed interface ActiveDialog {
+    data object None : ActiveDialog
+    data class CreateNote(val nameInput: String = "") : ActiveDialog
+    data class DeleteNote(val note: Note) : ActiveDialog
+    data class RenameNote(val note: Note, val nameInput: String) : ActiveDialog
+    data class ShowInfo(val note: Note) : ActiveDialog
+    data object Settings : ActiveDialog
+}
+
 data class AppUiState(
     val project: Project? = null,
     val error: String? = null,
@@ -16,14 +25,7 @@ data class AppUiState(
     val isSyncInProgress: Boolean = false,
     val settings: Settings? = null,
 
-    val isCreateNoteDialogVisible: Boolean = false,
-    val newNoteNameInput: String = "",
-
-    val isNoteShowInfoDialogVisible: Boolean = false,
-    val isNoteDeleteDialogVisible: Boolean = false,
-    val isNoteRenameDialogVisible: Boolean = false,
-    val noteRenameInput: String = "",
-    val dialogNote: Note? = null,
+    val activeDialog: ActiveDialog = ActiveDialog.None,
 
     val isLinkNoteDialogVisible: Boolean = false,
     val editorFrontMatter: FrontMatter? = null,
@@ -35,8 +37,6 @@ data class AppUiState(
     val messengerEditingNote: Note? = null,
     val messengerPinnedMessages: List<MessageBody> = emptyList(),
     val messengerSelectedNotes: Set<MessageBody> = emptySet(),
-
-    val isSettingsDialogVisible: Boolean = false,
 
     val pendingIntentAttachments: List<Attachment> = emptyList(),
 )

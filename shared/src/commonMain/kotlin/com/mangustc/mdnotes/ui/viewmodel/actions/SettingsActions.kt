@@ -5,6 +5,7 @@ import com.mangustc.mdnotes.domain.usecases.settings.SetSettingsInput
 import com.mangustc.mdnotes.domain.usecases.settings.SetSettingsUseCase
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
 import com.mangustc.mdnotes.ui.util.runUseCase
+import com.mangustc.mdnotes.ui.viewmodel.ActiveDialog
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
 import kotlinx.coroutines.flow.update
@@ -18,11 +19,11 @@ class SettingsActions(
     private val setSettingsUseCase: SetSettingsUseCase by inject()
 
     fun showSettings() {
-        deps.uiState.update { it.copy(isSettingsDialogVisible = true) }
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.Settings) }
     }
 
     fun dismissSettings() {
-        deps.uiState.update { it.copy(isSettingsDialogVisible = false) }
+        deps.uiState.update { it.copy(activeDialog = ActiveDialog.None) }
     }
 
     fun openYandexLink() {
