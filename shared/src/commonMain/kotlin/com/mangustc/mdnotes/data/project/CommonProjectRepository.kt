@@ -130,15 +130,15 @@ class CommonProjectRepository(
         val existingByUri = existingNotes.associateBy { it.uri }
         val existingByName = existingNotes.associateBy { it.name }
 
+        val toUpsert = mutableListOf<NoteEntity>()
         noteFiles.forEach { projectFile ->
             val file = projectFile.domainFile
             val uriStr = file.path
             val name = file.nameWithoutExtension
             val cached = existingByUri[uriStr] ?: existingByName[name]
+            val lastModified = file.file.lastModified().toEpochMilliseconds()
 
-            if (cached == null || file.file.lastModified()
-                    .toEpochMilliseconds() > cached.lastModified
-            ) {
+            if (cached == null || lastModified != cached.lastModified) {
                 val fullText = try {
                     file.file.readString()
                 } catch (e: CancellationException) {
@@ -149,26 +149,32 @@ class CommonProjectRepository(
                 val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
                 val tags = frontMatter.toTagString()
 
-                val entity = NoteEntity(
-                    id = cached?.id ?: 0,
-                    uri = uriStr,
-                    name = name,
-                    lastModified = file.file.lastModified().toEpochMilliseconds(),
-                    createdAt = frontMatter.toCreatedAtMillis(),
-                    tags = tags,
-                    body = body,
-                    projectId = projectId,
+                toUpsert.add(
+                    NoteEntity(
+                        id = cached?.id ?: 0,
+                        uri = uriStr,
+                        name = name,
+                        lastModified = lastModified,
+                        createdAt = frontMatter.toCreatedAtMillis(),
+                        tags = tags,
+                        body = body,
+                        projectId = projectId,
+                    ),
                 )
-                noteDao.insertNote(entity)
             }
         }
 
         val currentFileUris = noteFiles.map { it.domainFile.path }.toSet()
         val currentFileNames = noteFiles.map { it.domainFile.nameWithoutExtension }.toSet()
-        existingNotes.forEach { cached ->
-            if (cached.uri !in currentFileUris && cached.name !in currentFileNames) {
-                noteDao.deleteByUri(cached.uri)
-            }
+        val toDeleteUris = existingNotes
+            .filter { cached -> cached.uri !in currentFileUris && cached.name !in currentFileNames }
+            .map { it.uri }
+
+        if (toUpsert.isNotEmpty() || toDeleteUris.isNotEmpty()) {
+            noteDao.applySync(
+                toUpsert = toUpsert,
+                toDeleteUris = toDeleteUris,
+            )
         }
     }
 
