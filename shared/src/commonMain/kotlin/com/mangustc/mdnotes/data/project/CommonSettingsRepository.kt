@@ -5,6 +5,8 @@ import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.repositories.SettingsRepository
 import com.russhwolf.settings.Settings.Factory
+import dev.whyoleg.cryptography.CryptographyProvider
+import dev.whyoleg.cryptography.algorithms.SHA256
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.bookmarkData
 import io.github.vinceglb.filekit.exists
@@ -18,26 +20,37 @@ class CommonSettingsRepository(
     private val settingsFactory: Factory,
 ) : SettingsRepository {
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
+    private val sha256Hasher = CryptographyProvider.Default.get(SHA256).hasher()
 
     override suspend fun setSettings(
         project: Project,
         settings: Settings,
     ): Settings = withContext(Dispatchers.IO) {
-        val prefs = settingsFactory.create("${KEY_PREFIX_PROJECT}${project.name}")
+        val prefs = settingsFactory.create(projectStoreKey(project))
         val settingsJson = json.encodeToString(settings)
         prefs.putString(KEY_SETTINGS, settingsJson)
         settings
     }
 
     override suspend fun getSettings(project: Project): Settings = withContext(Dispatchers.IO) {
-        val prefs = settingsFactory.create("${KEY_PREFIX_PROJECT}${project.name}")
-        val settingsJson = prefs.getStringOrNull(KEY_SETTINGS)
-        val settings = runCatching {
-            if (settingsJson == null) return@runCatching null
-            json.decodeFromString<Settings>(settingsJson)
-        }.getOrNull() ?: Settings.EMPTY
-        settings
+        val prefs = settingsFactory.create(projectStoreKey(project))
+        val existingJson = prefs.getStringOrNull(KEY_SETTINGS)
+        if (existingJson != null) {
+            return@withContext decodeSettings(existingJson) ?: Settings.EMPTY
+        }
+
+        Settings.EMPTY
     }
+
+    private suspend fun projectStoreKey(project: Project): String {
+        val pathHash =
+            sha256Hasher.hash(project.rootDomainFile.path.encodeToByteArray()).toHexString()
+        return "$KEY_PREFIX_PROJECT$pathHash"
+    }
+
+    private fun decodeSettings(raw: String): Settings? = runCatching {
+        json.decodeFromString<Settings>(raw)
+    }.getOrNull()
 
     override suspend fun setProjectPath(path: DomainFile) = withContext(Dispatchers.IO) {
         val prefs = settingsFactory.create(KEY_PROJECT_URI)
