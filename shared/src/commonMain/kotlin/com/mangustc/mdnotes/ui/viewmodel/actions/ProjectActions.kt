@@ -45,39 +45,47 @@ class ProjectActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.uiState.update { it.copy(project = project, settings = settings) }
-
-            deps.globalActions.updateNoteLists()
+            deps.uiState.update {
+                it.copy(
+                    project = project,
+                    settings = settings,
+                    messengerIsLoading = false,
+                )
+            }
 
             runUseCase(deps.globalActions::onEvent) {
                 syncDatabaseUseCase(SyncDatabaseInput(project = project))
             }
-            deps.globalActions.updateNoteLists()
         }
     }
 
     fun loadSavedProject() {
         deps.scope.launch {
-            val project = runUseCase(deps.globalActions::onEvent) {
-                loadSavedProjectUseCase(Unit)
-            }.getOrElse { return@launch }
-            if (project != null) {
-                val settings = runUseCase(deps.globalActions::onEvent) {
-                    getSettingsUseCase(
-                        GetSettingsInput(
-                            project = project,
-                        ),
-                    )
+            try {
+                val project = runUseCase(deps.globalActions::onEvent) {
+                    loadSavedProjectUseCase(Unit)
                 }.getOrElse { return@launch }
-                deps.uiState.update { it.copy(project = project, settings = settings) }
+                if (project != null) {
+                    val settings = runUseCase(deps.globalActions::onEvent) {
+                        getSettingsUseCase(
+                            GetSettingsInput(
+                                project = project,
+                            ),
+                        )
+                    }.getOrElse { return@launch }
+                    deps.uiState.update {
+                        it.copy(
+                            project = project,
+                            settings = settings,
+                            messengerIsLoading = false,
+                        )
+                    }
 
-                deps.globalActions.updateNoteLists()
-
-                runUseCase(deps.globalActions::onEvent) {
-                    syncDatabaseUseCase(SyncDatabaseInput(project = project))
+                    runUseCase(deps.globalActions::onEvent) {
+                        syncDatabaseUseCase(SyncDatabaseInput(project = project))
+                    }
                 }
-                deps.globalActions.updateNoteLists()
-            } else {
+            } finally {
                 deps.uiState.update { it.copy(messengerIsLoading = false) }
             }
         }
@@ -112,7 +120,6 @@ class ProjectActions(
                 runUseCase(deps.globalActions::onEvent) {
                     syncDatabaseUseCase(SyncDatabaseInput(project = project))
                 }
-                deps.globalActions.updateNoteLists()
             }
         }
     }

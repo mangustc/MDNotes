@@ -17,10 +17,18 @@ import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -28,7 +36,6 @@ class AppViewModel(
     private val getAllTagsUseCase: GetAllTagsUseCase,
 ) : ViewModel(), AppGlobalActions {
     private val _uiState = MutableStateFlow(AppUiState())
-    val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
 
     private val deps by lazy {
         AppDeps(
@@ -40,14 +47,41 @@ class AppViewModel(
 
     val project = ProjectActions(deps)
     val settings = SettingsActions(deps)
-
-    init {
-        project.loadSavedProject()
-    }
-
     val drawer = DrawerActions(deps)
     val editor = EditorActions(deps)
     val messenger = MessengerActions(deps)
+
+    private val allProjectTagsFlow: Flow<List<String>> = _uiState
+        .map { it.project }
+        .distinctUntilChanged()
+        .flatMapLatest { project ->
+            if (project == null) {
+                flowOf(emptyList())
+            } else {
+                getAllTagsUseCase(GetAllTagsInput(project = project))
+                    .catch { e ->
+                        if (e !is Exception) throw e
+                        e.printStackTrace()
+                        onEvent(NotificationEvent.FromException(e))
+                        emit(emptyList())
+                    }
+            }
+        }
+
+    val uiState: StateFlow<AppUiState> = combine(
+        _uiState,
+        allProjectTagsFlow,
+        messenger.pinnedMessages,
+    ) { state, tags, pinnedMessages ->
+        state.copy(
+            allProjectTags = tags,
+            messengerPinnedMessages = pinnedMessages,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = _uiState.value,
+    )
 
     private val _navigationEvents = Channel<NavigationEvent>(Channel.BUFFERED)
     val navigationEvents = _navigationEvents.receiveAsFlow()
@@ -61,6 +95,10 @@ class AppViewModel(
     private val _focusEvents = Channel<FocusEvent>(Channel.BUFFERED)
     val focusEvents = _focusEvents.receiveAsFlow()
 
+    init {
+        project.loadSavedProject()
+    }
+
     override fun onEvent(event: AppEvent) {
         when (event) {
             is NavigationEvent -> _navigationEvents.trySend(event)
@@ -68,20 +106,6 @@ class AppViewModel(
             is ClipboardEvent -> _clipboardEvents.trySend(event)
             is FocusEvent -> _focusEvents.trySend(event)
         }
-    }
-
-    override suspend fun updateNoteLists() {
-        val project = _uiState.value.project ?: return
-        _uiState.update {
-            it.copy(
-                allProjectTags = getAllTagsUseCase(
-                    GetAllTagsInput(
-                        project = project,
-                    ),
-                ),
-            )
-        }
-        messenger.updateMessages()
     }
 
     fun onShareIntent(text: String?, attachments: List<Attachment>) {

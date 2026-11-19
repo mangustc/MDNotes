@@ -12,12 +12,12 @@ import kotlinx.coroutines.flow.Flow
 interface ProjectRepository {
     enum class FileExistsStrategy { OVERWRITE, AUTO_RENAME }
 
-    suspend fun getNotes(
+    fun getNotes(
         project: Project,
         query: SearchQuery = SearchQuery(),
         includeText: Boolean = false,
         includeFrontMatter: Boolean = true,
-    ): List<Note>
+    ): Flow<List<Note>>
 
     fun getNotesPaged(
         project: Project,
@@ -41,7 +41,7 @@ interface ProjectRepository {
         toDirPath: RelativePath,
     ): ProjectFile
 
-    suspend fun getAllTags(project: Project): List<String>
+    fun getAllTags(project: Project): Flow<List<String>>
     suspend fun writeFile(
         project: Project,
         relativePath: RelativePath,

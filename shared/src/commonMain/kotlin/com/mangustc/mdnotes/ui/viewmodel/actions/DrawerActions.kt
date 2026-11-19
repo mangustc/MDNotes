@@ -107,7 +107,6 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.globalActions.updateNoteLists()
             deps.globalActions.onEvent(NavigationEvent.GoToEditor(note))
         }
     }
@@ -131,7 +130,6 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.globalActions.updateNoteLists()
 
             val activeNote = deps.uiState.value.activeNote
             if (note.projectFile.relativePath == activeNote?.projectFile?.relativePath)
@@ -179,7 +177,6 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.globalActions.updateNoteLists()
         }
     }
 
@@ -195,7 +192,6 @@ class DrawerActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.globalActions.updateNoteLists()
         }
     }
 }

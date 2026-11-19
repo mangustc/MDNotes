@@ -2,7 +2,8 @@ package com.mangustc.mdnotes.domain.usecases.project
 
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
-import com.mangustc.mdnotes.domain.usecases.UseCase
+import com.mangustc.mdnotes.domain.usecases.FlowUseCase
+import kotlinx.coroutines.flow.Flow
 
 data class GetAllTagsInput(
     val project: Project,
@@ -10,8 +11,7 @@ data class GetAllTagsInput(
 
 class GetAllTagsUseCase(
     private val projectRepository: ProjectRepository,
-) : UseCase<GetAllTagsInput, List<String>> {
-    override suspend fun invoke(input: GetAllTagsInput): List<String> {
-        return projectRepository.getAllTags(input.project)
-    }
+) : FlowUseCase<GetAllTagsInput, List<String>> {
+    override fun invoke(input: GetAllTagsInput): Flow<List<String>> =
+        projectRepository.getAllTags(input.project)
 }

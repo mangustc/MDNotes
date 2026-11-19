@@ -47,16 +47,16 @@ class CommonProjectRepository(
     private val projectDao: ProjectDao,
     private val platformListFilesHandler: PlatformListFilesHandler,
 ) : ProjectRepository {
-    override suspend fun getNotes(
+    override fun getNotes(
         project: Project,
         query: SearchQuery,
         includeText: Boolean,
         includeFrontMatter: Boolean,
-    ): List<Note> = withContext(Dispatchers.IO) {
+    ): Flow<List<Note>> {
         val sqlQuery = query.buildRoomRawQuery(project)
-        val entities = noteDao.searchNotes(sqlQuery)
-
-        entities.map { entity -> entity.toNote(project, includeText) }
+        return noteDao.observeNotes(sqlQuery).map { entities ->
+            entities.map { entity -> entity.toNote(project, includeText) }
+        }
     }
 
     override fun getNotesPaged(
@@ -228,11 +228,8 @@ class CommonProjectRepository(
             )
         }
 
-    override suspend fun getAllTags(project: Project): List<String> = withContext(Dispatchers.IO) {
-        val projectId = getOrCreateProjectId(project)
-            ?: throw ProjectAccessException(project.rootDomainFile.name)
-        noteDao.getAllTags(projectId)
-    }
+    override fun getAllTags(project: Project): Flow<List<String>> =
+        noteDao.observeAllTags(project.rootDomainFile.path)
 
     override suspend fun writeFile(
         project: Project,

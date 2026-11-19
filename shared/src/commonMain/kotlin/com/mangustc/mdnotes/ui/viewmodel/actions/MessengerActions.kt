@@ -17,11 +17,14 @@ import com.mangustc.mdnotes.domain.usecases.notes.DeleteNoteUseCase
 import com.mangustc.mdnotes.ui.util.runUseCase
 import com.mangustc.mdnotes.ui.viewmodel.AppDeps
 import com.mangustc.mdnotes.ui.viewmodel.events.ClipboardEvent
+import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,22 +52,23 @@ class MessengerActions(
         }
         .cachedIn(deps.scope)
 
-    suspend fun updateMessages() {
-        val project = deps.uiState.value.project ?: return
-        val pinnedMessages = runUseCase(deps.globalActions::onEvent) {
-            getPinnedMessagesUseCase(
-                GetPinnedMessagesInput(
-                    project = project,
-                ),
-            )
-        }.getOrElse { return }
-        deps.uiState.update {
-            it.copy(
-                messengerPinnedMessages = pinnedMessages,
-                messengerIsLoading = false,
-            )
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val pinnedMessages: Flow<List<MessageBody>> = deps.uiState
+        .map { it.project }
+        .distinctUntilChanged()
+        .flatMapLatest { project ->
+            if (project == null) {
+                flowOf(emptyList())
+            } else {
+                getPinnedMessagesUseCase(GetPinnedMessagesInput(project = project))
+                    .catch { e ->
+                        if (e !is Exception) throw e
+                        e.printStackTrace()
+                        deps.globalActions.onEvent(NotificationEvent.FromException(e))
+                        emit(emptyList())
+                    }
+            }
         }
-    }
 
     fun onNewNoteTextChanged(text: String) {
         deps.uiState.update { it.copy(messengerNewNoteText = text) }
@@ -116,7 +120,6 @@ class MessengerActions(
                     messengerEditingNote = if (isEditedNote) null else state.messengerEditingNote,
                 )
             }
-            deps.globalActions.updateNoteLists()
             afterUpdate()
         }
     }
@@ -165,7 +168,6 @@ class MessengerActions(
                 }
             }
             clearSelection()
-            deps.globalActions.updateNoteLists()
         }
     }
 

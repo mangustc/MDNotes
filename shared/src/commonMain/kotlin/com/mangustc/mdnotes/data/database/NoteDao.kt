@@ -8,6 +8,7 @@ import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.RoomRawQuery
 import androidx.room.Transaction
+import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NoteDao {
@@ -70,11 +71,25 @@ interface NoteDao {
     suspend fun getNotesForProject(projectId: Long): List<NoteEntity>
 
     @Transaction
-    @RawQuery
-    suspend fun searchNotes(query: RoomRawQuery): List<NoteWithTags>
+    @RawQuery(
+        observedEntities = [
+            NoteEntity::class,
+            NoteEntityFts::class,
+            NoteTagEntity::class,
+            ProjectEntity::class,
+        ],
+    )
+    fun observeNotes(query: RoomRawQuery): Flow<List<NoteWithTags>>
 
     @Transaction
-    @RawQuery(observedEntities = [NoteEntity::class, NoteEntityFts::class, NoteTagEntity::class])
+    @RawQuery(
+        observedEntities = [
+            NoteEntity::class,
+            NoteEntityFts::class,
+            NoteTagEntity::class,
+            ProjectEntity::class,
+        ],
+    )
     fun searchNotesPaged(query: RoomRawQuery): PagingSource<Int, NoteWithTags>
 
     @Query(
@@ -82,9 +97,10 @@ interface NoteDao {
         SELECT DISTINCT nt.tag
         FROM note_tags nt
         INNER JOIN notes n ON n.id = nt.noteId
-        WHERE n.projectId = :projectId
+        INNER JOIN projects p ON p.id = n.projectId
+        WHERE p.rootPath = :rootPath
         ORDER BY nt.tag ASC
         """,
     )
-    suspend fun getAllTags(projectId: Long): List<String>
+    fun observeAllTags(rootPath: String): Flow<List<String>>
 }

@@ -83,11 +83,12 @@ class SendNoteUseCase(
             ).decodeToString()
 
             val document = NoteDocument.parse(baseText)
-            val updatedBody = if (bodyContent.isNotEmpty() && document.frontMatter.fields.isNotEmpty()) {
-                "\n$bodyContent"
-            } else {
-                bodyContent
-            }
+            val updatedBody =
+                if (bodyContent.isNotEmpty() && document.frontMatter.fields.isNotEmpty()) {
+                    "\n$bodyContent"
+                } else {
+                    bodyContent
+                }
             val finalContent = document.copy(body = updatedBody).serialize()
 
             saveNoteTextUseCase(

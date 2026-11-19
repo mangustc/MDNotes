@@ -5,11 +5,13 @@ import com.mangustc.mdnotes.domain.models.MessageBody
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.SearchQuery
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
-import com.mangustc.mdnotes.domain.usecases.UseCase
+import com.mangustc.mdnotes.domain.usecases.FlowUseCase
 import com.mangustc.mdnotes.domain.usecases.project.GetProjectFileInput
 import com.mangustc.mdnotes.domain.usecases.project.GetProjectFileUseCase
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 
 data class GetPinnedMessagesInput(
     val project: Project,
@@ -18,18 +20,18 @@ data class GetPinnedMessagesInput(
 class GetPinnedMessagesUseCase(
     private val projectRepository: ProjectRepository,
     private val getProjectFileUseCase: GetProjectFileUseCase,
-) : UseCase<GetPinnedMessagesInput, List<MessageBody>> {
-    override suspend fun invoke(input: GetPinnedMessagesInput): List<MessageBody> =
-        withContext(Dispatchers.Default) {
-            projectRepository.getNotes(
-                input.project,
-                SearchQuery(
-                    tagFilters = listOf(FrontMatter.QUICK_NOTE_TAG, FrontMatter.PINNED_TAG),
-                    sortBy = SearchQuery.SortBy.CREATED_AT,
-                ),
-                includeText = true,
-                includeFrontMatter = false,
-            ).map { note ->
+) : FlowUseCase<GetPinnedMessagesInput, List<MessageBody>> {
+    override fun invoke(input: GetPinnedMessagesInput): Flow<List<MessageBody>> =
+        projectRepository.getNotes(
+            input.project,
+            SearchQuery(
+                tagFilters = listOf(FrontMatter.QUICK_NOTE_TAG, FrontMatter.PINNED_TAG),
+                sortBy = SearchQuery.SortBy.CREATED_AT,
+            ),
+            includeText = true,
+            includeFrontMatter = false,
+        ).map { notes ->
+            notes.map { note ->
                 note.toMessageBody {
                     getProjectFileUseCase(
                         GetProjectFileInput(
@@ -39,5 +41,5 @@ class GetPinnedMessagesUseCase(
                     )
                 }
             }
-        }
+        }.flowOn(Dispatchers.Default)
 }

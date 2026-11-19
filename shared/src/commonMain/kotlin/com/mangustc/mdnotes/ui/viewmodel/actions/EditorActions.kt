@@ -319,7 +319,6 @@ class EditorActions(
                     ),
                 )
             }.getOrElse { return@launch }
-            deps.globalActions.updateNoteLists()
             deps.uiState.update { it.copy(editorSavedVersion = it.editorVersion) }
         }
     }
