@@ -13,8 +13,8 @@ import com.mangustc.mdnotes.domain.exceptions.FileNotReadableException
 import com.mangustc.mdnotes.domain.exceptions.FileNotWritableException
 import com.mangustc.mdnotes.domain.exceptions.ProjectAccessException
 import com.mangustc.mdnotes.domain.models.DomainFile
-import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.NoteDocument
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.ProjectFile
 import com.mangustc.mdnotes.domain.models.RelativePath
@@ -92,7 +92,7 @@ class CommonProjectRepository(
         } catch (e: Exception) {
             throw FileNotReadableException(relativePath.value, e)
         }
-        val (frontMatter, text) = FrontMatter.splitFromContent(fullText)
+        val document = NoteDocument.parse(fullText)
 
         Note(
             name = file.nameWithoutExtension,
@@ -101,15 +101,13 @@ class CommonProjectRepository(
                 relativePath = relativePath,
             ),
             lastModified = file.file.lastModified().toEpochMilliseconds(),
-            createdAt = frontMatter.toCreatedAtMillis(),
-            tags = frontMatter.tags,
-            body = if (includeText && includeFrontMatter) {
-                fullText
-            } else if (includeText || includeFrontMatter) buildString {
-                if (includeFrontMatter) append(frontMatter.toString())
-                if (includeText) append(text)
-            } else {
-                null
+            createdAt = document.frontMatter.toCreatedAtMillis(),
+            tags = document.frontMatter.tags,
+            body = when {
+                includeText && includeFrontMatter -> fullText
+                includeFrontMatter -> if (document.frontMatter.fields.isNotEmpty()) document.frontMatter.toString() else ""
+                includeText -> document.body
+                else -> null
             },
         )
     }
@@ -146,7 +144,7 @@ class CommonProjectRepository(
                 } catch (e: Exception) {
                     throw FileNotReadableException(file.name, e)
                 }
-                val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
+                val (frontMatter, body) = NoteDocument.parse(fullText)
                 val tags = frontMatter.toTagString()
 
                 toUpsert.add(
@@ -387,7 +385,7 @@ class CommonProjectRepository(
             val projectId = getOrCreateProjectId(project) ?: return
             val existing = noteDao.getNoteByUri(file.path)
             val fullText = contentBytes.decodeToString()
-            val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
+            val (frontMatter, body) = NoteDocument.parse(fullText)
 
             val entity = NoteEntity(
                 id = existing?.id ?: 0,

@@ -6,6 +6,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.NoteDocument
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.SpanInfo
 import com.mangustc.mdnotes.domain.usecases.editor.ApplyEditorEventInput
@@ -212,7 +213,7 @@ class EditorActions(
                         ),
                     )
                 }.getOrElse { return@launch }
-                val (frontMatter, body) = FrontMatter.splitFromContent(
+                val (frontMatter, body) = NoteDocument.parse(
                     note.body ?: throw Exception(),
                 )
                 deps.uiState.update {
@@ -304,11 +305,10 @@ class EditorActions(
             val bodyText = state.text.toString()
             val fm = deps.uiState.value.editorFrontMatter
 
-            val textToSave = if (fm != null && fm.fields.isNotEmpty()) {
-                "$fm\n$bodyText"
-            } else {
-                bodyText
-            }
+            val textToSave = NoteDocument(
+                frontMatter = fm ?: FrontMatter.Empty,
+                body = bodyText,
+            ).serialize()
 
             runUseCase(deps.globalActions::onEvent) {
                 saveNoteTextUseCase(

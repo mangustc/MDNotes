@@ -120,20 +120,5 @@ data class FrontMatter(
 
             return FrontMatter(fields)
         }
-
-        fun splitFromContent(content: String): Pair<FrontMatter, String> {
-            if (!content.trimStart().startsWith("---")) return Empty to content
-            val lines = content.lines()
-            val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
-            if (closeIdx < 0) return Empty to content
-            val fmText = lines.drop(1).take(closeIdx).joinToString("\n")
-            val body = lines.drop(closeIdx + 2).joinToString("\n")
-            val frontMatter = try {
-                parse(fmText)
-            } catch (e: IllegalArgumentException) {
-                Empty
-            }
-            return frontMatter to body
-        }
     }
 }

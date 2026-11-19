@@ -3,6 +3,7 @@ package com.mangustc.mdnotes.domain.usecases.messenger
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.NoteDocument
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.usecases.UseCase
@@ -81,16 +82,13 @@ class SendNoteUseCase(
                 relativePath = targetNote.projectFile.relativePath,
             ).decodeToString()
 
-            val frontMatterEnd = run {
-                if (!baseText.trimStart().startsWith("---")) return@run 0
-                val lines = baseText.lines()
-                val closeIdx = lines.drop(1).indexOfFirst { it.trim() == "---" }
-                if (closeIdx < 0) 0
-                else lines.take(closeIdx + 2).joinToString("\n").length
+            val document = NoteDocument.parse(baseText)
+            val updatedBody = if (bodyContent.isNotEmpty() && document.frontMatter.fields.isNotEmpty()) {
+                "\n$bodyContent"
+            } else {
+                bodyContent
             }
-            val parentContent = baseText.substring(0, frontMatterEnd).trimEnd()
-            val finalContent =
-                if (bodyContent.isNotEmpty()) "$parentContent\n\n$bodyContent" else parentContent
+            val finalContent = document.copy(body = updatedBody).serialize()
 
             saveNoteTextUseCase(
                 SaveNoteTextInput(

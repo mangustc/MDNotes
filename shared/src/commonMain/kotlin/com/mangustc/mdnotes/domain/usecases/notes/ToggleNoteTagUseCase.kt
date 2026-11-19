@@ -2,6 +2,7 @@ package com.mangustc.mdnotes.domain.usecases.notes
 
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.NoteDocument
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.usecases.UseCase
@@ -19,18 +20,18 @@ class ToggleNoteTagUseCase(
         val fullText =
             projectRepository.readFile(input.project, input.note.projectFile.relativePath)
                 .decodeToString()
-        val (frontMatter, body) = FrontMatter.splitFromContent(fullText)
+        val document = NoteDocument.parse(fullText)
 
-        val updatedFrontMatter = if (input.tag in frontMatter.tags) {
-            frontMatter.withoutTag(input.tag)
+        val updatedFrontMatter = if (input.tag in document.frontMatter.tags) {
+            document.frontMatter.withoutTag(input.tag)
         } else {
-            frontMatter.withTag(input.tag)
+            document.frontMatter.withTag(input.tag)
         }
 
         projectRepository.writeFile(
             project = input.project,
             relativePath = input.note.projectFile.relativePath,
-            byteArray = "${updatedFrontMatter}\n$body".toByteArray(),
+            byteArray = document.copy(frontMatter = updatedFrontMatter).serialize().toByteArray(),
             fileExistsStrategy = ProjectRepository.FileExistsStrategy.OVERWRITE,
         )
 

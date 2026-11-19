@@ -1,6 +1,8 @@
 package com.mangustc.mdnotes.domain.usecases.notes
 
+import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
+import com.mangustc.mdnotes.domain.models.NoteDocument
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
@@ -22,13 +24,22 @@ class CreateNoteUseCase(
     private val getNoteUseCase: GetNoteUseCase,
 ) : UseCase<CreateNoteInput, Note> {
     override suspend fun invoke(input: CreateNoteInput): Note {
-        val isoDate = Clock.System.now().toString()
-        var frontMatterBuilder = "---\ncreatedAt: $isoDate"
-        frontMatterBuilder += "\ntags:"
-        if (input.tags.isNotEmpty()) {
-            input.tags.forEach { tag -> frontMatterBuilder += "\n- $tag" }
-        }
-        val initialContent = "$frontMatterBuilder\n---\n${input.initialText}"
+        val frontMatter = FrontMatter(
+            fields = buildMap {
+                put(
+                    FrontMatter.CREATED_AT_FIELD,
+                    FrontMatter.FrontMatterValue.Scalar(Clock.System.now().toString()),
+                )
+                put(
+                    FrontMatter.TAGS_FIELD,
+                    FrontMatter.FrontMatterValue.StringList(input.tags),
+                )
+            },
+        )
+        val initialContent = NoteDocument(
+            frontMatter = frontMatter,
+            body = input.initialText,
+        ).serialize()
 
         val sanitizedNoteName = sanitizeFileName("${input.name}.md", "New Note")
 
