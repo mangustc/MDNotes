@@ -6,6 +6,7 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import com.mangustc.mdnotes.data.database.NoteDao
 import com.mangustc.mdnotes.data.database.NoteEntity
+import com.mangustc.mdnotes.data.database.NoteWithTags
 import com.mangustc.mdnotes.data.database.ProjectDao
 import com.mangustc.mdnotes.data.database.ProjectEntity
 import com.mangustc.mdnotes.domain.exceptions.FileNotFoundException
@@ -124,11 +125,11 @@ class CommonProjectRepository(
                     it.domainFile.extension.equals("md", ignoreCase = true)
         }
 
-        val existingNotes = noteDao.searchNotes(SearchQuery().buildRoomRawQuery(project))
+        val existingNotes = noteDao.getNotesForProject(projectId)
         val existingByUri = existingNotes.associateBy { it.uri }
         val existingByName = existingNotes.associateBy { it.name }
 
-        val toUpsert = mutableListOf<NoteEntity>()
+        val toUpsert = mutableListOf<NoteWithTags>()
         noteFiles.forEach { projectFile ->
             val file = projectFile.domainFile
             val uriStr = file.path
@@ -145,18 +146,19 @@ class CommonProjectRepository(
                     throw FileNotReadableException(file.name, e)
                 }
                 val (frontMatter, body) = NoteDocument.parse(fullText)
-                val tags = frontMatter.toTagString()
 
                 toUpsert.add(
-                    NoteEntity(
-                        id = cached?.id ?: 0,
-                        uri = uriStr,
-                        name = name,
-                        lastModified = lastModified,
-                        createdAt = frontMatter.toCreatedAtMillis(),
-                        tags = tags,
-                        body = body,
-                        projectId = projectId,
+                    NoteWithTags(
+                        note = NoteEntity(
+                            id = cached?.id ?: 0,
+                            uri = uriStr,
+                            name = name,
+                            lastModified = lastModified,
+                            createdAt = frontMatter.toCreatedAtMillis(),
+                            body = body,
+                            projectId = projectId,
+                        ),
+                        tags = frontMatter.tags,
                     ),
                 )
             }
@@ -229,8 +231,7 @@ class CommonProjectRepository(
     override suspend fun getAllTags(project: Project): List<String> = withContext(Dispatchers.IO) {
         val projectId = getOrCreateProjectId(project)
             ?: throw ProjectAccessException(project.rootDomainFile.name)
-        noteDao.getAllTags(projectId).flatMap { it.split(" ") }.filter { it.isNotBlank() }
-            .distinct()
+        noteDao.getAllTags(projectId)
     }
 
     override suspend fun writeFile(
@@ -395,10 +396,9 @@ class CommonProjectRepository(
                 lastModified = kotlin.runCatching { file.file.lastModified().toEpochMilliseconds() }
                     .getOrDefault(kotlin.time.Clock.System.now().toEpochMilliseconds()),
                 createdAt = frontMatter.toCreatedAtMillis() ?: existing?.createdAt,
-                tags = frontMatter.toTagString(),
                 body = body,
             )
-            noteDao.insertNote(entity)
+            noteDao.upsertNoteWithTags(entity, frontMatter.tags)
         }
     }
 

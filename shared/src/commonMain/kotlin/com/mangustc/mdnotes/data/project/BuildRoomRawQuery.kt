@@ -1,8 +1,15 @@
 package com.mangustc.mdnotes.data.project
 
 import androidx.room.RoomRawQuery
+import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.SearchQuery
+
+private fun escapeLike(value: String): String =
+    value
+        .replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
 
 fun SearchQuery.buildRoomRawQuery(project: Project): RoomRawQuery {
     val args = mutableListOf<Any>()
@@ -21,33 +28,40 @@ fun SearchQuery.buildRoomRawQuery(project: Project): RoomRawQuery {
     conditions.add("notes.projectId = (SELECT id FROM projects WHERE rootPath = ? LIMIT 1)")
     args.add(project.rootDomainFile.path)
     for (term in negatedBodyTerms) {
-        conditions.add("notes.body NOT LIKE ?")
-        args.add("%$term%")
+        conditions.add("notes.body NOT LIKE ? ESCAPE '\\'")
+        args.add("%${escapeLike(term)}%")
     }
     for (tag in positiveTagLikes()) {
-        conditions.add("notes.tags LIKE ?")
-        args.add("%$tag%")
+        conditions.add(
+            "EXISTS (SELECT 1 FROM note_tags WHERE note_tags.noteId = notes.id AND note_tags.tag = ?)",
+        )
+        args.add(tag)
     }
     for (tag in negatedTagLikes()) {
-        conditions.add("notes.tags NOT LIKE ?")
-        args.add("%$tag%")
+        conditions.add(
+            "NOT EXISTS (SELECT 1 FROM note_tags WHERE note_tags.noteId = notes.id AND note_tags.tag = ?)",
+        )
+        args.add(tag)
     }
     nameFilter?.let {
-        conditions.add("notes.name LIKE ?")
-        args.add("%$it%")
+        conditions.add("notes.name LIKE ? ESCAPE '\\'")
+        args.add("%${escapeLike(it)}%")
     }
     negatedNameFilter?.let {
-        conditions.add("notes.name NOT LIKE ?")
-        args.add("%$it%")
+        conditions.add("notes.name NOT LIKE ? ESCAPE '\\'")
+        args.add("%${escapeLike(it)}%")
     }
     if (conditions.isNotEmpty()) {
         sb.append("\nWHERE ")
         sb.append(conditions.joinToString("\n  AND "))
     }
 
-    val pinnedClause = if (pinnedFirst)
-        "CASE WHEN notes.tags LIKE '%pinned%' THEN 0 ELSE 1 END ASC,\n  "
-    else ""
+    val pinnedClause = if (pinnedFirst) {
+        args.add(FrontMatter.PINNED_TAG)
+        "CASE WHEN EXISTS (SELECT 1 FROM note_tags WHERE note_tags.noteId = notes.id AND note_tags.tag = ?) THEN 0 ELSE 1 END ASC,\n  "
+    } else {
+        ""
+    }
     val sortClause = when (sortBy) {
         SearchQuery.SortBy.LAST_MODIFIED -> "notes.lastModified DESC"
         SearchQuery.SortBy.CREATED_AT ->

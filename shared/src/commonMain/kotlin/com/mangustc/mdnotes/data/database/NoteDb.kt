@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
     entities = [
         ProjectEntity::class,
         NoteEntity::class,
+        NoteTagEntity::class,
         NoteEntityFts::class,
         LinkPreviewEntity::class,
     ],
-    version = 5,
+    version = 7,
     exportSchema = false,
 )
 abstract class NoteDb : RoomDatabase() {
