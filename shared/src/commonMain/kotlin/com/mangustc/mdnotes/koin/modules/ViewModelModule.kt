@@ -1,20 +1,21 @@
 package com.mangustc.mdnotes.koin.modules
 
-import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
-import com.mangustc.mdnotes.ui.viewmodel.actions.DrawerActions
-import com.mangustc.mdnotes.ui.viewmodel.actions.EditorActions
-import com.mangustc.mdnotes.ui.viewmodel.actions.MessengerActions
-import com.mangustc.mdnotes.ui.viewmodel.actions.ProjectActions
-import com.mangustc.mdnotes.ui.viewmodel.actions.SettingsActions
+import com.mangustc.mdnotes.ui.viewmodel.EditorViewModel
+import com.mangustc.mdnotes.ui.viewmodel.MainViewModel
+import com.mangustc.mdnotes.ui.viewmodel.MessengerViewModel
+import com.mangustc.mdnotes.ui.viewmodel.session.AppEventBus
+import com.mangustc.mdnotes.ui.viewmodel.session.EditorCoordinator
+import com.mangustc.mdnotes.ui.viewmodel.session.ProjectSession
 import org.koin.dsl.module
-import org.koin.plugin.module.dsl.factory
+import org.koin.plugin.module.dsl.single
 import org.koin.plugin.module.dsl.viewModel
 
 val viewModelModule = module {
-    factory<ProjectActions.Factory>()
-    factory<SettingsActions.Factory>()
-    factory<DrawerActions.Factory>()
-    factory<EditorActions.Factory>()
-    factory<MessengerActions.Factory>()
-    viewModel<AppViewModel>()
+    single<AppEventBus>()
+    single<ProjectSession>()
+    single<EditorCoordinator>()
+
+    viewModel<MainViewModel>()
+    viewModel<MessengerViewModel>()
+    viewModel<EditorViewModel>()
 }

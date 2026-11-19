@@ -10,14 +10,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.documentfile.provider.DocumentFile
 import com.mangustc.mdnotes.domain.models.Attachment
 import com.mangustc.mdnotes.domain.models.DomainFile
-import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
+import com.mangustc.mdnotes.ui.viewmodel.session.ProjectSession
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.init
-import org.koin.androidx.viewmodel.ext.android.viewModel
+import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
-    private val appViewModel: AppViewModel by viewModel()
+    private val projectSession: ProjectSession by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,19 +26,19 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
 
-        handleShareIntent(intent, appViewModel)
+        handleShareIntent(intent)
 
         setContent {
-            App(viewModel = appViewModel)
+            App()
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleShareIntent(intent, appViewModel)
+        handleShareIntent(intent)
     }
 
-    private fun handleShareIntent(intent: Intent, viewModel: AppViewModel) {
+    private fun handleShareIntent(intent: Intent) {
         val action = intent.action ?: return
         if (action != Intent.ACTION_SEND && action != Intent.ACTION_SEND_MULTIPLE) return
 
@@ -71,7 +71,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (text != null || attachments.isNotEmpty()) {
-            viewModel.onShareIntent(text, attachments)
+            projectSession.submitShareIntent(text, attachments)
         }
     }
 }

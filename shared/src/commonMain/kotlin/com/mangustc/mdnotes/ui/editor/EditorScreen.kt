@@ -112,14 +112,12 @@ import com.mangustc.mdnotes.domain.models.DomainFile
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
-import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.models.SpanInfo
 import com.mangustc.mdnotes.domain.usecases.editor.EditorEvent
 import com.mangustc.mdnotes.ui.components.NoteDrawerItem
 import com.mangustc.mdnotes.ui.components.NoteSearchBar
 import com.mangustc.mdnotes.ui.components.TooltipIconButton
-import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
-import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
+import com.mangustc.mdnotes.ui.viewmodel.EditorViewModel
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import mdnotes.shared.generated.resources.Res
@@ -149,7 +147,7 @@ data class EditorLayoutState(
 )
 @Composable
 fun EditorScreen(
-    viewModel: AppViewModel,
+    viewModel: EditorViewModel,
     noteRelativePath: String,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -158,22 +156,22 @@ fun EditorScreen(
     val isViewingMode by rememberUpdatedState(uiState.isViewingMode)
 
     LaunchedEffect(noteRelativePath) {
-        viewModel.editor.onNoteOpened(RelativePath(noteRelativePath))
+        viewModel.onNoteOpened(RelativePath(noteRelativePath))
     }
 
     DisposableEffect(noteRelativePath) {
         onDispose {
-            viewModel.editor.onEditorDisposed(RelativePath(noteRelativePath))
+            viewModel.onEditorDisposed(RelativePath(noteRelativePath))
         }
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
-        viewModel.editor.saveNow()
+        viewModel.saveNow()
     }
 
     val editorSpans by remember {
         derivedStateOf {
-            MarkdownParser.parse(viewModel.editor.state.text.toString())
+            MarkdownParser.parse(viewModel.state.text.toString())
         }
     }
     var layoutState by remember { mutableStateOf<EditorLayoutState?>(null) }
@@ -195,7 +193,7 @@ fun EditorScreen(
     val dimmedTextColor = MaterialTheme.colorScheme.primaryFixedDim
     val outputTransformation = remember {
         MarkdownOutputTransformation(
-            state = viewModel.editor.state.state,
+            state = viewModel.state.state,
             density = density,
             widthProvider = { editorWidth },
             spansProvider = { editorSpans },
@@ -210,23 +208,23 @@ fun EditorScreen(
         type = FileKitType.Image,
     ) { file ->
         if (file == null) return@rememberFilePickerLauncher
-        viewModel.editor.onEvent(EditorEvent.AttachPhoto(path = DomainFile(file)))
+        viewModel.onEvent(EditorEvent.AttachPhoto(path = DomainFile(file)))
     }
     val filePickerLauncher = rememberFilePickerLauncher(
         type = FileKitType.File(),
     ) { file ->
         if (file == null) return@rememberFilePickerLauncher
-        viewModel.editor.onEvent(EditorEvent.AttachFile(path = DomainFile(file)))
+        viewModel.onEvent(EditorEvent.AttachFile(path = DomainFile(file)))
     }
 
 
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     var toolbarHeightDp by remember { mutableStateOf(0.dp) }
     val imeBottom = WindowInsets.ime.getBottom(density)
-    LaunchedEffect(viewModel.editor.state.selection, layoutState, toolbarHeightDp, imeBottom) {
+    LaunchedEffect(viewModel.state.selection, layoutState, toolbarHeightDp, imeBottom) {
         if (uiState.isViewingMode) return@LaunchedEffect
         val layoutResult = layoutState?.layout ?: return@LaunchedEffect
-        val selection = viewModel.editor.state.selection
+        val selection = viewModel.state.selection
         if (selection.collapsed) {
             val cursor = selection.start.coerceIn(0, layoutResult.layoutInput.text.length)
             val cursorRect = layoutResult.getCursorRect(cursor)
@@ -272,16 +270,16 @@ fun EditorScreen(
                 ) {
                     Row(modifier = Modifier.horizontalScroll(toolbarScrollState)) {
                         TooltipIconButton(
-                            onClick = { viewModel.editor.onEvent(EditorEvent.Undo) },
+                            onClick = { viewModel.onEvent(EditorEvent.Undo) },
                             icon = Icons.AutoMirrored.Filled.Undo,
                             tooltip = stringResource(Res.string.undo),
-                            enabled = viewModel.editor.state.undoState.canUndo,
+                            enabled = viewModel.state.undoState.canUndo,
                         )
                         TooltipIconButton(
-                            onClick = { viewModel.editor.onEvent(EditorEvent.Redo) },
+                            onClick = { viewModel.onEvent(EditorEvent.Redo) },
                             icon = Icons.AutoMirrored.Filled.Redo,
                             tooltip = stringResource(Res.string.redo),
-                            enabled = viewModel.editor.state.undoState.canRedo,
+                            enabled = viewModel.state.undoState.canRedo,
                         )
                         TooltipIconButton(
                             onClick = {
@@ -296,27 +294,27 @@ fun EditorScreen(
                             tooltip = stringResource(Res.string.attach_file),
                         )
                         TooltipIconButton(
-                            onClick = { viewModel.editor.showLinkNoteDialog() },
+                            onClick = { viewModel.showLinkNoteDialog() },
                             icon = Icons.Default.AddLink,
                             tooltip = stringResource(Res.string.link_note),
                         )
                         TooltipIconButton(
                             onClick = {
-                                viewModel.editor.onEvent(EditorEvent.Bold)
+                                viewModel.onEvent(EditorEvent.Bold)
                             },
                             icon = Icons.Default.FormatBold,
                             tooltip = stringResource(Res.string.bold),
                         )
                         TooltipIconButton(
                             onClick = {
-                                viewModel.editor.onEvent(EditorEvent.Italic)
+                                viewModel.onEvent(EditorEvent.Italic)
                             },
                             icon = Icons.Default.FormatItalic,
                             tooltip = stringResource(Res.string.italic),
                         )
                         TooltipIconButton(
                             onClick = {
-                                viewModel.editor.onEvent(EditorEvent.Code)
+                                viewModel.onEvent(EditorEvent.Code)
                             },
                             icon = Icons.Default.Code,
                             tooltip = stringResource(Res.string.inline_code),
@@ -342,7 +340,7 @@ fun EditorScreen(
                         state = rememberTooltipState(),
                     ) {
                         FloatingActionButton(
-                            onClick = { viewModel.editor.toggleViewingMode() },
+                            onClick = { viewModel.toggleViewingMode() },
                         ) {
                             Icon(
                                 Icons.Default.EditNote,
@@ -363,21 +361,21 @@ fun EditorScreen(
                         .verticalScroll(scrollState),
                 ) {
                     Column {
-                        uiState.editorFrontMatter?.let { fm ->
+                        uiState.frontMatter?.let { fm ->
                             FrontMatterProperties(
                                 frontMatter = fm,
                                 allTags = uiState.allProjectTags,
-                                onUpdateKey = viewModel.editor::updateFmKey,
-                                onUpdateValue = viewModel.editor::updateFmValue,
-                                onAddProperty = viewModel.editor::addFmProperty,
-                                onAddTag = viewModel.editor::addFmTag,
-                                onRemoveTag = viewModel.editor::removeFmTag,
-                                onRemoveProperty = viewModel.editor::removeFmProperty,
+                                onUpdateKey = viewModel::updateFmKey,
+                                onUpdateValue = viewModel::updateFmValue,
+                                onAddProperty = viewModel::addFmProperty,
+                                onAddTag = viewModel::addFmTag,
+                                onRemoveTag = viewModel::removeFmTag,
+                                onRemoveProperty = viewModel::removeFmProperty,
                             )
                         }
                         Box {
                             MarkdownEditorField(
-                                state = viewModel.editor.state.state,
+                                state = viewModel.state.state,
                                 transformation = outputTransformation,
                                 onTextLayout = onLayoutChange,
                                 readOnly = isViewingMode,
@@ -393,23 +391,25 @@ fun EditorScreen(
                             )
 
                             layoutState?.let { state ->
-                                if (state.imageSpans.isNotEmpty() && uiState.project != null) {
-                                    state.imageSpans.forEach { span ->
-                                        key(span.payload) {
-                                            MarkdownImageOverlay(
-                                                span = span,
-                                                state = viewModel.editor.state.state,
-                                                layoutResult = state.layout,
-                                                project = uiState.project!!,
-                                                density = density,
-                                                editorWidth = editorWidth,
-                                                imageAspectRatios = imageAspectRatios,
-                                                onRatioMeasured = { path, ratio ->
-                                                    imageAspectRatios =
-                                                        imageAspectRatios + (path to ratio)
-                                                },
-                                                isViewingMode = uiState.isViewingMode,
-                                            )
+                                uiState.project?.let { project ->
+                                    if (state.imageSpans.isNotEmpty()) {
+                                        state.imageSpans.forEach { span ->
+                                            key(span.payload) {
+                                                MarkdownImageOverlay(
+                                                    span = span,
+                                                    state = viewModel.state.state,
+                                                    layoutResult = state.layout,
+                                                    project = project,
+                                                    density = density,
+                                                    editorWidth = editorWidth,
+                                                    imageAspectRatios = imageAspectRatios,
+                                                    onRatioMeasured = { path, ratio ->
+                                                        imageAspectRatios =
+                                                            imageAspectRatios + (path to ratio)
+                                                    },
+                                                    isViewingMode = uiState.isViewingMode,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -420,9 +420,9 @@ fun EditorScreen(
                                         key(span.payload) {
                                             MarkdownLinkOverlay(
                                                 span = span,
-                                                state = viewModel.editor.state.state,
+                                                state = viewModel.state.state,
                                                 layoutResult = state.layout,
-                                                viewModel = viewModel,
+                                                onOpenLink = viewModel::openLink,
                                             )
                                         }
                                     }
@@ -435,20 +435,19 @@ fun EditorScreen(
     }
 
     if (uiState.isLinkNoteDialogVisible) {
-        Dialog(onDismissRequest = { viewModel.editor.dismissLinkNoteDialog() }) {
+        Dialog(onDismissRequest = { viewModel.dismissLinkNoteDialog() }) {
             Surface(
                 shape = SearchBarDefaults.dockedShape,
             ) {
                 Box(modifier = Modifier.padding(vertical = 8.dp)) {
                     val linkSearchResults =
-                        viewModel.editor.linkSearchResultsPaged.collectAsLazyPagingItems()
+                        viewModel.linkSearchResultsPaged.collectAsLazyPagingItems()
                     NoteSearchBar(
-                        searchState = viewModel.editor.linkSearchState,
+                        searchState = viewModel.linkSearchState,
                         searchResults = linkSearchResults,
-                        onSearchEvent = viewModel.editor::onLinkSearchEvent,
+                        onSearchEvent = viewModel::onLinkSearchEvent,
                         paddingValues = PaddingValues(horizontal = 16.dp),
-                        reverseLayout = uiState.settings?.reverseLayout
-                            ?: Settings.EMPTY.reverseLayout,
+                        reverseLayout = uiState.reverseLayout,
                     ) { note ->
                         NoteDrawerItem(
                             name = note.name,
@@ -456,8 +455,8 @@ fun EditorScreen(
                                 ", ",
                             ) else null,
                             onClick = {
-                                viewModel.editor.onEvent(EditorEvent.InsertNoteLink(note))
-                                viewModel.onEvent(FocusEvent.ClearFocus)
+                                viewModel.onEvent(EditorEvent.InsertNoteLink(note))
+                                viewModel.clearFocus()
                             },
                         )
                     }
@@ -764,7 +763,7 @@ fun MarkdownLinkOverlay(
     span: SpanInfo.Link,
     state: TextFieldState,
     layoutResult: TextLayoutResult,
-    viewModel: AppViewModel,
+    onOpenLink: (SpanInfo.Link) -> Unit,
 ) {
     val selection = state.selection
     if (selection.start !in span.range.start..span.range.end) return
@@ -809,9 +808,7 @@ fun MarkdownLinkOverlay(
                 )
                 TextButton(
                     onClick = {
-                        viewModel.editor.openLink(
-                            span = span,
-                        )
+                        onOpenLink(span)
                     },
                     modifier = Modifier
                         .padding(start = 4.dp),

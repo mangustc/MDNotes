@@ -1,13 +1,17 @@
-package com.mangustc.mdnotes.ui.viewmodel.actions
+package com.mangustc.mdnotes.ui.viewmodel
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.snapshotFlow
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import com.mangustc.mdnotes.domain.models.FrontMatter
 import com.mangustc.mdnotes.domain.models.Note
 import com.mangustc.mdnotes.domain.models.NoteDocument
+import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
+import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.models.SpanInfo
 import com.mangustc.mdnotes.domain.usecases.editor.ApplyEditorEventInput
 import com.mangustc.mdnotes.domain.usecases.editor.ApplyEditorEventUseCase
@@ -18,6 +22,8 @@ import com.mangustc.mdnotes.domain.usecases.notes.GetNoteInput
 import com.mangustc.mdnotes.domain.usecases.notes.GetNoteUseCase
 import com.mangustc.mdnotes.domain.usecases.notes.SaveNoteTextInput
 import com.mangustc.mdnotes.domain.usecases.notes.SaveNoteTextUseCase
+import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsInput
+import com.mangustc.mdnotes.domain.usecases.project.GetAllTagsUseCase
 import com.mangustc.mdnotes.domain.usecases.project.GetNotesInput
 import com.mangustc.mdnotes.domain.usecases.project.GetNotesUseCase
 import com.mangustc.mdnotes.domain.usecases.project.GetProjectFileInput
@@ -28,28 +34,51 @@ import com.mangustc.mdnotes.domain.usecases.search.SearchEvent
 import com.mangustc.mdnotes.ui.components.ComposeTextState
 import com.mangustc.mdnotes.ui.util.launchSafe
 import com.mangustc.mdnotes.ui.util.runUseCase
-import com.mangustc.mdnotes.ui.viewmodel.AppDeps
+import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
+import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
+import com.mangustc.mdnotes.ui.viewmodel.session.AppEventBus
+import com.mangustc.mdnotes.ui.viewmodel.session.EditorCoordinator
+import com.mangustc.mdnotes.ui.viewmodel.session.EditorSessionHandler
+import com.mangustc.mdnotes.ui.viewmodel.session.ProjectSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Duration.Companion.seconds
 
+data class EditorUiState(
+    val project: Project? = null,
+    val reverseLayout: Boolean = Settings.EMPTY.reverseLayout,
+    val activeNote: Note? = null,
+    val frontMatter: FrontMatter? = null,
+    val allProjectTags: List<String> = emptyList(),
+    val isViewingMode: Boolean = true,
+    val isLinkNoteDialogVisible: Boolean = false,
+)
+
 @OptIn(FlowPreview::class)
-class EditorActions(
-    private val deps: AppDeps,
+class EditorViewModel(
+    private val projectSession: ProjectSession,
+    private val eventBus: AppEventBus,
+    private val editorCoordinator: EditorCoordinator,
+    private val getAllTagsUseCase: GetAllTagsUseCase,
     private val getNotesUseCase: GetNotesUseCase,
     private val getRealSpanInfoLinkTypeUseCase: GetRealSpanInfoLinkTypeUseCase,
     private val getNoteUseCase: GetNoteUseCase,
@@ -57,39 +86,71 @@ class EditorActions(
     private val saveNoteTextUseCase: SaveNoteTextUseCase,
     private val applyEditorEventUseCase: ApplyEditorEventUseCase,
     private val applySearchEventUseCase: ApplySearchEventUseCase,
-) {
-    class Factory(
-        private val getNotesUseCase: GetNotesUseCase,
-        private val getRealSpanInfoLinkTypeUseCase: GetRealSpanInfoLinkTypeUseCase,
-        private val getNoteUseCase: GetNoteUseCase,
-        private val getProjectFileUseCase: GetProjectFileUseCase,
-        private val saveNoteTextUseCase: SaveNoteTextUseCase,
-        private val applyEditorEventUseCase: ApplyEditorEventUseCase,
-        private val applySearchEventUseCase: ApplySearchEventUseCase,
-    ) {
-        fun create(deps: AppDeps): EditorActions = EditorActions(
-            deps = deps,
-            getNotesUseCase = getNotesUseCase,
-            getRealSpanInfoLinkTypeUseCase = getRealSpanInfoLinkTypeUseCase,
-            getNoteUseCase = getNoteUseCase,
-            getProjectFileUseCase = getProjectFileUseCase,
-            saveNoteTextUseCase = saveNoteTextUseCase,
-            applyEditorEventUseCase = applyEditorEventUseCase,
-            applySearchEventUseCase = applySearchEventUseCase,
-        )
-    }
+) : ViewModel(), EditorSessionHandler {
+
+    private data class LocalState(
+        val activeNote: Note? = null,
+        val frontMatter: FrontMatter? = null,
+        val isLinkNoteDialogVisible: Boolean = false,
+    )
+
+    private val _localState = MutableStateFlow(LocalState())
+    private val _isViewingMode = MutableStateFlow(true)
+    val isViewingMode: StateFlow<Boolean> = _isViewingMode.asStateFlow()
 
     val state = ComposeTextState()
     val linkSearchState = ComposeTextState()
 
     @OptIn(ExperimentalCoroutinesApi::class)
+    private val allProjectTagsFlow: Flow<List<String>> = projectSession.project
+        .flatMapLatest { project ->
+            if (project == null) {
+                flowOf(emptyList())
+            } else {
+                getAllTagsUseCase(GetAllTagsInput(project = project))
+                    .catch { e ->
+                        if (e !is Exception) throw e
+                        e.printStackTrace()
+                        eventBus.emit(NotificationEvent.FromException(e))
+                        emit(emptyList())
+                    }
+            }
+        }
+
+    val uiState: StateFlow<EditorUiState> = combine(
+        projectSession.project,
+        projectSession.settings,
+        allProjectTagsFlow,
+        _localState,
+        _isViewingMode,
+    ) { project, settings, tags, local, isViewingMode ->
+        EditorUiState(
+            project = project,
+            reverseLayout = settings?.reverseLayout ?: Settings.EMPTY.reverseLayout,
+            activeNote = local.activeNote,
+            frontMatter = local.frontMatter,
+            allProjectTags = tags,
+            isViewingMode = isViewingMode,
+            isLinkNoteDialogVisible = local.isLinkNoteDialogVisible,
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = EditorUiState(
+            project = projectSession.project.value,
+            reverseLayout = projectSession.settings.value?.reverseLayout
+                ?: Settings.EMPTY.reverseLayout,
+        ),
+    )
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     val linkSearchResultsPaged: Flow<PagingData<Note>> = combine(
-        deps.uiState.map { it.project }.distinctUntilChanged(),
+        projectSession.project,
         snapshotFlow { linkSearchState.text },
     ) { project, text -> project to text.toString() }
         .flatMapLatest { (project, queryStr) ->
             if (project == null) return@flatMapLatest emptyFlow()
-            runUseCase(deps.globalActions::onEvent) {
+            runUseCase(eventBus::emit) {
                 getNotesUseCase(
                     GetNotesInput(
                         project = project,
@@ -98,10 +159,35 @@ class EditorActions(
                 )
             }.getOrElse { emptyFlow() }
         }
-        .cachedIn(deps.scope)
+        .cachedIn(viewModelScope)
+
+    private val editorMutex = Mutex()
+    private var lastSavedBodyRef: CharSequence? = null
+    private var currentFmVersion: Long = 0L
+    private var savedFmVersion: Long = 0L
+    private var activeSessionRoutePath: RelativePath? = null
+
+    init {
+        editorCoordinator.register(this)
+        viewModelScope.launch {
+            snapshotFlow { state.text }
+                .drop(1)
+                .debounce(2.seconds)
+                .collect { flushSave() }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        editorCoordinator.unregister(this)
+    }
+
+    fun clearFocus() {
+        eventBus.emit(FocusEvent.ClearFocus)
+    }
 
     fun onLinkSearchEvent(event: SearchEvent) {
-        deps.scope.launchSafe(deps.globalActions::onEvent) {
+        viewModelScope.launchSafe(eventBus::emit) {
             applySearchEventUseCase(
                 ApplySearchEventInput(
                     event = event,
@@ -111,24 +197,18 @@ class EditorActions(
         }
     }
 
-    private val editorMutex = Mutex()
-    private var lastSavedBodyRef: CharSequence? = null
-    private var currentFmVersion: Long = 0L
-    private var savedFmVersion: Long = 0L
-    private var activeSessionRoutePath: RelativePath? = null
-
     fun onCloseEditor() {
-        deps.scope.launch {
+        viewModelScope.launch {
             editorMutex.withLock {
                 flushSaveLocked()
                 clearSessionLocked()
             }
-            deps.globalActions.onEvent(NavigationEvent.GoBack)
+            eventBus.emit(NavigationEvent.GoBack)
         }
     }
 
     fun onEditorDisposed(routePath: RelativePath) {
-        deps.scope.launch {
+        viewModelScope.launch {
             editorMutex.withLock {
                 if (activeSessionRoutePath == routePath) {
                     flushSaveLocked()
@@ -139,64 +219,59 @@ class EditorActions(
     }
 
     fun saveNow() {
-        deps.scope.launch {
+        viewModelScope.launch {
             flushSave()
         }
     }
 
-    suspend fun flushSave() {
+    override suspend fun flushSave() {
         editorMutex.withLock {
             flushSaveLocked()
         }
     }
 
-    suspend fun onNoteDeleted(notePath: RelativePath) {
+    override suspend fun onNoteDeleted(notePath: RelativePath) {
         editorMutex.withLock {
-            if (deps.uiState.value.activeNote?.projectFile?.relativePath == notePath) {
+            if (_localState.value.activeNote?.projectFile?.relativePath == notePath) {
                 clearSessionLocked()
             }
         }
     }
 
-    suspend fun onNoteRenamed(oldPath: RelativePath, renamedNote: Note) {
+    override suspend fun onNoteRenamed(oldPath: RelativePath, renamedNote: Note) {
         editorMutex.withLock {
-            if (deps.uiState.value.activeNote?.projectFile?.relativePath == oldPath) {
-                deps.uiState.update { it.copy(activeNote = renamedNote) }
+            if (_localState.value.activeNote?.projectFile?.relativePath == oldPath) {
+                _localState.update { it.copy(activeNote = renamedNote) }
+                editorCoordinator.setActiveNote(renamedNote)
             }
         }
     }
 
-    suspend fun onNoteFrontMatterUpdated(notePath: RelativePath, frontMatter: FrontMatter) {
+    override suspend fun onNoteFrontMatterUpdated(
+        notePath: RelativePath,
+        frontMatter: FrontMatter
+    ) {
         editorMutex.withLock {
-            if (deps.uiState.value.activeNote?.projectFile?.relativePath == notePath) {
-                deps.uiState.update { it.copy(editorFrontMatter = frontMatter) }
+            if (_localState.value.activeNote?.projectFile?.relativePath == notePath) {
+                _localState.update { it.copy(frontMatter = frontMatter) }
                 savedFmVersion = currentFmVersion
             }
         }
     }
 
     fun showLinkNoteDialog() {
-        deps.uiState.update { it.copy(isLinkNoteDialogVisible = true) }
+        _localState.update { it.copy(isLinkNoteDialogVisible = true) }
     }
 
     fun dismissLinkNoteDialog() {
-        deps.uiState.update { it.copy(isLinkNoteDialogVisible = false) }
+        _localState.update { it.copy(isLinkNoteDialogVisible = false) }
         linkSearchState.setTextAndPlaceCursorAtEnd("")
-    }
-
-    init {
-        deps.scope.launch {
-            snapshotFlow { state.text }
-                .drop(1)
-                .debounce(2.seconds)
-                .collect { flushSave() }
-        }
     }
 
     @OptIn(ExperimentalFoundationApi::class)
     fun onEvent(event: EditorEvent) {
-        deps.scope.launchSafe(deps.globalActions::onEvent) {
-            val project = deps.uiState.value.project ?: return@launchSafe
+        viewModelScope.launchSafe(eventBus::emit) {
+            val project = projectSession.project.value ?: return@launchSafe
             applyEditorEventUseCase(
                 ApplyEditorEventInput(
                     project = project,
@@ -211,8 +286,8 @@ class EditorActions(
     }
 
     fun openLink(span: SpanInfo.Link) {
-        deps.scope.launchSafe(deps.globalActions::onEvent) {
-            val project = deps.uiState.value.project ?: return@launchSafe
+        viewModelScope.launchSafe(eventBus::emit) {
+            val project = projectSession.project.value ?: return@launchSafe
 
             val realLinkType = getRealSpanInfoLinkTypeUseCase(
                 GetRealSpanInfoLinkTypeInput(
@@ -228,7 +303,7 @@ class EditorActions(
                             relativePath = RelativePath(span.payload),
                         ),
                     )
-                    deps.globalActions.onEvent(NavigationEvent.GoToEditor(note = note))
+                    eventBus.emit(NavigationEvent.GoToEditor(note = note))
                 }
 
                 SpanInfo.Link.LinkType.FILE -> {
@@ -238,11 +313,11 @@ class EditorActions(
                             relativePath = RelativePath(span.payload),
                         ),
                     )
-                    deps.globalActions.onEvent(NavigationEvent.OpenFile(projectFile.domainFile))
+                    eventBus.emit(NavigationEvent.OpenFile(projectFile.domainFile))
                 }
 
                 SpanInfo.Link.LinkType.HTTP -> {
-                    deps.globalActions.onEvent(NavigationEvent.OpenUrl(span.payload))
+                    eventBus.emit(NavigationEvent.OpenUrl(span.payload))
                 }
             }
         }
@@ -250,12 +325,12 @@ class EditorActions(
 
     @OptIn(ExperimentalFoundationApi::class)
     fun onNoteOpened(notePath: RelativePath) {
-        deps.scope.launch {
+        viewModelScope.launch {
             editorMutex.withLock {
                 flushSaveLocked()
                 try {
-                    val project = deps.uiState.value.project ?: throw Exception()
-                    val note = runUseCase(deps.globalActions::onEvent) {
+                    val project = projectSession.project.value ?: throw Exception()
+                    val note = runUseCase(eventBus::emit) {
                         getNoteUseCase(
                             GetNoteInput(
                                 project = project,
@@ -275,17 +350,18 @@ class EditorActions(
                     lastSavedBodyRef = state.text
                     savedFmVersion = currentFmVersion
                     activeSessionRoutePath = notePath
-                    deps.uiState.update {
+                    _localState.update {
                         it.copy(
                             activeNote = note,
-                            editorFrontMatter = frontMatter,
-                            isViewingMode = true,
+                            frontMatter = frontMatter,
                         )
                     }
+                    _isViewingMode.value = true
+                    editorCoordinator.setActiveNote(note)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) {
-                    deps.globalActions.onEvent(NavigationEvent.GoBack)
+                    eventBus.emit(NavigationEvent.GoBack)
                 }
             }
         }
@@ -328,14 +404,14 @@ class EditorActions(
     }
 
     fun toggleViewingMode() {
-        deps.uiState.update { it.copy(isViewingMode = !it.isViewingMode) }
+        _isViewingMode.update { !it }
     }
 
     private fun updateFrontMatter(transform: (FrontMatter?) -> FrontMatter?) {
-        deps.scope.launch {
+        viewModelScope.launch {
             editorMutex.withLock {
-                deps.uiState.update {
-                    it.copy(editorFrontMatter = transform(it.editorFrontMatter))
+                _localState.update {
+                    it.copy(frontMatter = transform(it.frontMatter))
                 }
                 currentFmVersion++
                 flushSaveLocked()
@@ -347,31 +423,32 @@ class EditorActions(
         activeSessionRoutePath = null
         lastSavedBodyRef = null
         savedFmVersion = currentFmVersion
-        deps.uiState.update {
+        _localState.update {
             it.copy(
                 isLinkNoteDialogVisible = false,
                 activeNote = null,
-                editorFrontMatter = null,
+                frontMatter = null,
             )
         }
+        editorCoordinator.setActiveNote(null)
     }
 
     private suspend fun flushSaveLocked() {
-        val project = deps.uiState.value.project ?: return
-        val note = deps.uiState.value.activeNote ?: return
+        val project = projectSession.project.value ?: return
+        val note = _localState.value.activeNote ?: return
         val currentBodyRef = state.text
         val isBodyDirty = currentBodyRef !== lastSavedBodyRef
         val isFmDirty = currentFmVersion != savedFmVersion
         if (!isBodyDirty && !isFmDirty) return
 
         val fmVersionToSave = currentFmVersion
-        val fm = deps.uiState.value.editorFrontMatter
+        val fm = _localState.value.frontMatter
         val textToSave = NoteDocument(
             frontMatter = fm ?: FrontMatter.Empty,
             body = currentBodyRef.toString(),
         ).serialize()
 
-        runUseCase(deps.globalActions::onEvent) {
+        runUseCase(eventBus::emit) {
             saveNoteTextUseCase(
                 SaveNoteTextInput(
                     project = project,

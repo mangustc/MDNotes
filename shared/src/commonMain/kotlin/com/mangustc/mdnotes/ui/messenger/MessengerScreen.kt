@@ -49,7 +49,7 @@ import com.mangustc.mdnotes.ui.util.DateFormatter
 import com.mangustc.mdnotes.ui.util.RememberCameraLauncher
 import com.mangustc.mdnotes.ui.util.clipEntryOf
 import com.mangustc.mdnotes.ui.util.scrollbar
-import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
+import com.mangustc.mdnotes.ui.viewmodel.MessengerViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.NotificationEvent
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -67,7 +67,7 @@ import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MessengerScreen(viewModel: AppViewModel) {
+fun MessengerScreen(viewModel: MessengerViewModel) {
     val dateFormatter = koinInject<DateFormatter>()
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -115,17 +115,23 @@ fun MessengerScreen(viewModel: AppViewModel) {
         )
     }
 
-    LaunchedEffect(Unit) {
-        val pending = viewModel.consumePendingIntentAttachments()
-        if (!pending.isEmpty()) carouselExpanded = true
-        attachments.addAll(pending)
+    val pendingShareIntent by viewModel.pendingShareIntent.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingShareIntent) {
+        val payload = viewModel.consumeShareIntent() ?: return@LaunchedEffect
+        if (!payload.text.isNullOrEmpty()) {
+            viewModel.onNewNoteTextChanged(payload.text)
+        }
+        if (payload.attachments.isNotEmpty()) {
+            carouselExpanded = true
+            attachments.addAll(payload.attachments)
+        }
     }
-    val pagedNotes = viewModel.messenger.notesPaged.collectAsLazyPagingItems()
+    val pagedNotes = viewModel.notesPaged.collectAsLazyPagingItems()
 
     val listState = rememberLazyListState()
     val currentPinnedInfo by remember {
         derivedStateOf {
-            val pinned = uiState.messengerPinnedMessages
+            val pinned = uiState.pinnedMessages
             if (pinned.isEmpty()) return@derivedStateOf null
 
             val pinnedIndicesInList = pinned.map { pinnedNote ->
@@ -154,22 +160,22 @@ fun MessengerScreen(viewModel: AppViewModel) {
     val actions = remember(viewModel) {
         object : MessengerUiActions {
             override fun onNoteSelected(message: MessageBody) {
-                viewModel.drawer.onNoteSelected(message.note)
+                viewModel.openNote(message.note)
             }
 
             override fun onDeleteNote(message: MessageBody) {
-                viewModel.drawer.onDeleteNote(message.note)
+                viewModel.deleteNote(message.note)
             }
 
             override fun onEditNote(message: MessageBody) {
-                viewModel.messenger.startEditNote(message)
+                viewModel.startEditNote(message)
                 attachments.clear()
                 attachments.addAll(message.attachments)
                 if (attachments.isNotEmpty()) carouselExpanded = true
             }
 
             override fun onCancelEdit() {
-                viewModel.messenger.cancelEditNote()
+                viewModel.cancelEditNote()
                 attachments.clear()
                 carouselExpanded = false
             }
@@ -183,20 +189,20 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 try {
                     FileKit.openFileWithDefaultApplication(file.file)
                 } catch (_: Exception) {
-                    viewModel.onEvent(NotificationEvent.NoAppFoundToOpenThisFile)
+                    viewModel.emitEvent(NotificationEvent.NoAppFoundToOpenThisFile)
                 }
             }
 
             override fun onPinNote(message: MessageBody) {
-                viewModel.drawer.onPinNote(message.note)
+                viewModel.pinNote(message.note)
             }
 
             override fun onToggleSelect(message: MessageBody) {
-                viewModel.messenger.toggleNoteSelection(message)
+                viewModel.toggleNoteSelection(message)
             }
 
             override fun onEnsurePreview(url: String) {
-                viewModel.messenger.ensureLinkPreview(url)
+                viewModel.ensureLinkPreview(url)
             }
 
             override val onTakePhoto =
@@ -217,13 +223,13 @@ fun MessengerScreen(viewModel: AppViewModel) {
             override fun onSend() {
                 val snapshot = attachments.toList()
                 attachments.clear()
-                if (uiState.messengerEditingNote != null) {
-                    viewModel.messenger.onSendNote(
+                if (uiState.editingNote != null) {
+                    viewModel.onSendNote(
                         isEditedNote = true,
                         attachments = snapshot,
                     )
                 } else {
-                    viewModel.messenger.onSendNote(
+                    viewModel.onSendNote(
                         isEditedNote = false,
                         attachments = snapshot,
                         afterUpdate = {
@@ -267,14 +273,14 @@ fun MessengerScreen(viewModel: AppViewModel) {
             override fun copyLink(text: String) {
                 scope.launch {
                     clipboard.setClipEntry(clipEntryOf(text))
-                    viewModel.onEvent(NotificationEvent.LinkCopied)
+                    viewModel.emitEvent(NotificationEvent.LinkCopied)
                     focusManager.clearFocus()
                 }
             }
         }
     }
 
-    if (!uiState.messengerIsLoading && uiState.project == null) {
+    if (!uiState.isLoading && uiState.project == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = stringResource(Res.string.open_a_project_folder_to_see_notes),
@@ -290,10 +296,10 @@ fun MessengerScreen(viewModel: AppViewModel) {
                 .imePadding(),
         ) {
             MessengerInputBar(
-                value = uiState.messengerNewNoteText,
-                onValueChange = { viewModel.messenger.onNewNoteTextChanged(it) },
+                value = uiState.newNoteText,
+                onValueChange = { viewModel.onNewNoteTextChanged(it) },
                 attachments = attachments,
-                isEditing = uiState.messengerEditingNote != null,
+                isEditing = uiState.editingNote != null,
                 carouselExpanded = carouselExpanded,
                 actions = actions,
                 modifier = Modifier
@@ -302,7 +308,7 @@ fun MessengerScreen(viewModel: AppViewModel) {
                     .onSizeChanged { inputBarHeightDp = with(density) { it.height.toDp() } },
             )
             when {
-                uiState.messengerIsLoading -> {
+                uiState.isLoading -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center,
@@ -328,9 +334,9 @@ fun MessengerScreen(viewModel: AppViewModel) {
 
                 else -> {
                     var pinnedBannerHeightDp by remember { mutableStateOf(0.dp) }
-                    if (uiState.messengerPinnedMessages.isNotEmpty()) {
+                    if (uiState.pinnedMessages.isNotEmpty()) {
                         PinnedMessageBanner(
-                            notes = uiState.messengerPinnedMessages,
+                            notes = uiState.pinnedMessages,
                             currentIndex = currentPinnedInfo ?: 0,
                             actions = actions,
                             modifier = Modifier
@@ -404,11 +410,11 @@ fun MessengerScreen(viewModel: AppViewModel) {
                                     }
                                     MessageBubble(
                                         message = note,
-                                        linkPreviews = uiState.messengerLinkPreviews,
+                                        linkPreviews = uiState.linkPreviews,
                                         isPinned = note.note.tags?.contains(FrontMatter.PINNED_TAG)
                                             ?: false,
-                                        isSelected = uiState.messengerSelectedNotes.contains(note),
-                                        isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty(),
+                                        isSelected = uiState.selectedNotes.contains(note),
+                                        isSelectionMode = uiState.selectedNotes.isNotEmpty(),
                                         actions = actions,
                                         dateFormatter = dateFormatter,
                                     )

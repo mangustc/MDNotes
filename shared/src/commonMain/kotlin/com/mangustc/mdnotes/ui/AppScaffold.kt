@@ -97,7 +97,9 @@ import com.mangustc.mdnotes.ui.settings.SettingsDialog
 import com.mangustc.mdnotes.ui.util.clipEntryOf
 import com.mangustc.mdnotes.ui.util.onNotificationToast
 import com.mangustc.mdnotes.ui.viewmodel.ActiveDialog
-import com.mangustc.mdnotes.ui.viewmodel.AppViewModel
+import com.mangustc.mdnotes.ui.viewmodel.EditorViewModel
+import com.mangustc.mdnotes.ui.viewmodel.MainViewModel
+import com.mangustc.mdnotes.ui.viewmodel.MessengerViewModel
 import com.mangustc.mdnotes.ui.viewmodel.events.ClipboardEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.FocusEvent
 import com.mangustc.mdnotes.ui.viewmodel.events.NavigationEvent
@@ -120,11 +122,14 @@ import mdnotes.shared.generated.resources.select_project_folder
 import mdnotes.shared.generated.resources.settings
 import mdnotes.shared.generated.resources.synchronization
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AppScaffold(
-    appViewModel: AppViewModel,
+    mainViewModel: MainViewModel = koinViewModel(),
+    messengerViewModel: MessengerViewModel = koinViewModel(),
+    editorViewModel: EditorViewModel = koinViewModel(),
 ) = BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val isLargeScreen = remember(maxWidth) {
         maxWidth > 840.dp
@@ -135,11 +140,13 @@ fun AppScaffold(
     val drawerState =
         rememberDrawerState(if (isLargeScreen) DrawerValue.Open else DrawerValue.Closed)
 
-    val uiState by appViewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
+    val selectedNotes by messengerViewModel.selectedNotes.collectAsStateWithLifecycle()
+    val isViewingMode by editorViewModel.isViewingMode.collectAsStateWithLifecycle()
 
     val folderPicker = rememberDirectoryPickerLauncher { directory ->
         if (directory == null) return@rememberDirectoryPickerLauncher
-        appViewModel.project.onProjectSelected(DomainFile(directory))
+        mainViewModel.onProjectSelected(DomainFile(directory))
     }
 
     val clipboard = LocalClipboard.current
@@ -148,7 +155,7 @@ fun AppScaffold(
 
     val currentIsLargeScreen by rememberUpdatedState(isLargeScreen)
     LaunchedEffect(Unit) {
-        appViewModel.navigationEvents.collect {
+        mainViewModel.navigationEvents.collect {
             when (it) {
                 is NavigationEvent.GoToEditor -> {
                     if (!currentIsLargeScreen) drawerState.close()
@@ -173,7 +180,7 @@ fun AppScaffold(
     }
 
     LaunchedEffect(Unit) {
-        appViewModel.focusEvents.collect {
+        mainViewModel.focusEvents.collect {
             when (it) {
                 is FocusEvent.ClearFocus -> focusManager.clearFocus()
             }
@@ -181,7 +188,7 @@ fun AppScaffold(
     }
 
     LaunchedEffect(Unit) {
-        appViewModel.clipboardEvents.collect {
+        mainViewModel.clipboardEvents.collect {
             when (it) {
                 is ClipboardEvent.Copy -> clipboard.setClipEntry(
                     clipEntryOf(it.text),
@@ -198,12 +205,12 @@ fun AppScaffold(
                 snackbarHostState.showSnackbar(message)
             }
         }
-        appViewModel.notificationEvents.collect {
+        mainViewModel.notificationEvents.collect {
             onNotificationToast(it, ::toast)
         }
     }
 
-    val searchResults = appViewModel.drawer.searchResultsPaged.collectAsLazyPagingItems()
+    val searchResults = mainViewModel.searchResultsPaged.collectAsLazyPagingItems()
 
     val drawerSheetContent = remember {
         movableContentOf {
@@ -260,7 +267,7 @@ fun AppScaffold(
                                     SplitButtonDefaults.TonalTrailingButton(
                                         checked = false,
                                         onCheckedChange = {
-                                            appViewModel.settings.showSettings()
+                                            mainViewModel.showSettings()
                                         },
                                     ) {
                                         Icon(
@@ -283,7 +290,7 @@ fun AppScaffold(
                         ) {
                             OutlinedIconButton(
                                 onClick = {
-                                    appViewModel.project.syncNow()
+                                    mainViewModel.syncNow()
                                 },
                                 border = BorderStroke(
                                     width = IconButtonDefaults.outlinedIconButtonBorder(true).width,
@@ -312,9 +319,9 @@ fun AppScaffold(
             val searchComponent = @Composable {
                 if (uiState.project != null) {
                     NoteSearchBar(
-                        searchState = appViewModel.drawer.searchState,
+                        searchState = mainViewModel.searchState,
                         searchResults = searchResults,
-                        onSearchEvent = appViewModel.drawer::onSearchEvent,
+                        onSearchEvent = mainViewModel::onSearchEvent,
                         reverseLayout = reverseLayout,
                         paddingValues = PaddingValues(horizontal = 16.dp),
                     ) { note ->
@@ -327,12 +334,12 @@ fun AppScaffold(
                                 },
                             isPinned = note.tags?.contains(FrontMatter.PINNED_TAG) == true,
                             selected = note.projectFile.relativePath == uiState.activeNote?.projectFile?.relativePath,
-                            onClick = { appViewModel.drawer.onNoteSelected(note); focusManager.clearFocus() },
-                            onOpen = { appViewModel.drawer.onNoteSelected(note) },
-                            onDelete = { appViewModel.drawer.showNoteDeleteDialog(note) },
-                            onRename = { appViewModel.drawer.showNoteRenameDialog(note) },
-                            onShowInfo = { appViewModel.drawer.showNoteShowInfoDialog(note) },
-                            onPin = { appViewModel.drawer.onPinNote(note) },
+                            onClick = { mainViewModel.onNoteSelected(note); focusManager.clearFocus() },
+                            onOpen = { mainViewModel.onNoteSelected(note) },
+                            onDelete = { mainViewModel.showNoteDeleteDialog(note) },
+                            onRename = { mainViewModel.showNoteRenameDialog(note) },
+                            onShowInfo = { mainViewModel.showNoteShowInfoDialog(note) },
+                            onPin = { mainViewModel.onPinNote(note) },
                         )
                     }
                 } else {
@@ -354,7 +361,7 @@ fun AppScaffold(
             val createNoteComponent = @Composable {
                 if (uiState.project != null) {
                     FilledTonalButton(
-                        onClick = { appViewModel.drawer.showCreateNoteDialog() },
+                        onClick = { mainViewModel.showCreateNoteDialog() },
                         modifier = Modifier
                             .padding(horizontal = 16.dp)
                             .fillMaxWidth(),
@@ -402,7 +409,7 @@ fun AppScaffold(
 
     val scaffoldContent = remember {
         movableContentOf<Boolean> { isLarge ->
-            val isSelectionMode = uiState.messengerSelectedNotes.isNotEmpty()
+            val isSelectionMode = selectedNotes.isNotEmpty()
 
             Scaffold(
                 snackbarHost = {
@@ -413,7 +420,7 @@ fun AppScaffold(
                         TopAppBar(
                             title = {
                                 if (isSelectionMode) {
-                                    Text("${uiState.messengerSelectedNotes.size}")
+                                    Text("${selectedNotes.size}")
                                 } else {
                                     Text(
                                         if (navBackStackEntry?.destination?.route == MessengerDestination::class.qualifiedName) stringResource(
@@ -428,14 +435,14 @@ fun AppScaffold(
                             navigationIcon = {
                                 if (isSelectionMode) {
                                     TooltipIconButton(
-                                        onClick = { appViewModel.messenger.clearSelection() },
+                                        onClick = { messengerViewModel.clearSelection() },
                                         icon = Icons.Default.Close,
                                         tooltip = stringResource(Res.string.clear_selection),
                                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
                                     )
                                 } else if (navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName) {
                                     TooltipIconButton(
-                                        onClick = { appViewModel.editor.onCloseEditor() },
+                                        onClick = { editorViewModel.onCloseEditor() },
                                         icon = Icons.AutoMirrored.Filled.ArrowBack,
                                         tooltip = stringResource(Res.string.go_back),
                                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
@@ -443,7 +450,7 @@ fun AppScaffold(
                                 } else {
                                     TooltipIconButton(
                                         onClick = {
-                                            appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                                            mainViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
                                         },
                                         icon = Icons.Default.Menu,
                                         tooltip = stringResource(Res.string.open_menu),
@@ -455,14 +462,14 @@ fun AppScaffold(
                                 if (isSelectionMode) {
                                     TooltipIconButton(
                                         onClick = {
-                                            appViewModel.messenger.copySelectedNotesText()
+                                            messengerViewModel.copySelectedNotesText()
                                         },
                                         icon = Icons.Outlined.ContentCopy,
                                         tooltip = stringResource(Res.string.copy_selected),
                                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
                                     )
                                     TooltipIconButton(
-                                        onClick = { appViewModel.messenger.deleteSelectedNotes() },
+                                        onClick = { messengerViewModel.deleteSelectedNotes() },
                                         icon = Icons.Outlined.Delete,
                                         tooltip = stringResource(Res.string.delete_selected),
                                         tooltipAnchorPosition = TooltipAnchorPosition.Below,
@@ -472,9 +479,9 @@ fun AppScaffold(
                                 if (!isSelectionMode &&
                                     navBackStackEntry?.destination?.route != MessengerDestination::class.qualifiedName
                                 ) {
-                                    if (!uiState.isViewingMode) {
+                                    if (!isViewingMode) {
                                         TooltipIconButton(
-                                            onClick = { appViewModel.editor.toggleViewingMode() },
+                                            onClick = { editorViewModel.toggleViewingMode() },
                                             icon = Icons.Default.Visibility,
                                             tooltip = stringResource(Res.string.read_editor),
                                             tooltipAnchorPosition = TooltipAnchorPosition.Below,
@@ -493,12 +500,12 @@ fun AppScaffold(
                     composable<EditorDestination> { backStackEntry ->
                         val data: EditorDestination = backStackEntry.toRoute()
                         EditorScreen(
-                            viewModel = appViewModel,
+                            viewModel = editorViewModel,
                             noteRelativePath = data.noteRelativePath,
                         )
                     }
                     composable<MessengerDestination> {
-                        MessengerScreen(viewModel = appViewModel)
+                        MessengerScreen(viewModel = messengerViewModel)
                     }
                 }
             }
@@ -516,7 +523,7 @@ fun AppScaffold(
                 navigationIcon = {
                     TooltipIconButton(
                         onClick = {
-                            appViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
+                            mainViewModel.onEvent(if (drawerState.isOpen) NavigationEvent.CloseDrawer else NavigationEvent.OpenDrawer)
                         },
                         icon = Icons.Default.Menu,
                         tooltip = stringResource(Res.string.open_menu),
@@ -567,22 +574,22 @@ fun AppScaffold(
         ActiveDialog.None -> Unit
         is ActiveDialog.CreateNote -> {
             CreateNoteDialog(
-                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onDismissRequest = { mainViewModel.dismissDialog() },
                 onConfirmCreate = {
-                    appViewModel.drawer.onCreateNote(dialog.nameInput)
-                    appViewModel.drawer.dismissDialog()
+                    mainViewModel.onCreateNote(dialog.nameInput)
+                    mainViewModel.dismissDialog()
                 },
                 initialName = dialog.nameInput,
-                onNameChange = { newName -> appViewModel.drawer.updateNewNoteName(newName) },
+                onNameChange = { newName -> mainViewModel.updateNewNoteName(newName) },
             )
         }
 
         is ActiveDialog.DeleteNote -> {
             DeleteNoteDialog(
-                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onDismissRequest = { mainViewModel.dismissDialog() },
                 onConfirmDelete = {
-                    appViewModel.drawer.onDeleteNote(dialog.note)
-                    appViewModel.drawer.dismissDialog()
+                    mainViewModel.onDeleteNote(dialog.note)
+                    mainViewModel.dismissDialog()
                 },
                 noteName = dialog.note.name,
             )
@@ -590,19 +597,19 @@ fun AppScaffold(
 
         is ActiveDialog.RenameNote -> {
             RenameNoteDialog(
-                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onDismissRequest = { mainViewModel.dismissDialog() },
                 onConfirmRename = {
-                    appViewModel.drawer.onRenameNote(dialog.note, dialog.nameInput)
-                    appViewModel.drawer.dismissDialog()
+                    mainViewModel.onRenameNote(dialog.note, dialog.nameInput)
+                    mainViewModel.dismissDialog()
                 },
                 name = dialog.nameInput,
-                onNameChange = { newName -> appViewModel.drawer.onRenameNameInputChanged(newName) },
+                onNameChange = { newName -> mainViewModel.onRenameNameInputChanged(newName) },
             )
         }
 
         is ActiveDialog.ShowInfo -> {
             ShowInfoDialog(
-                onDismissRequest = { appViewModel.drawer.dismissDialog() },
+                onDismissRequest = { mainViewModel.dismissDialog() },
                 note = dialog.note,
             )
         }
@@ -610,12 +617,12 @@ fun AppScaffold(
         ActiveDialog.Settings -> {
             uiState.settings?.let { settings ->
                 SettingsDialog(
-                    onDismissRequest = { appViewModel.settings.dismissSettings() },
+                    onDismissRequest = { mainViewModel.dismissSettings() },
                     settings = settings,
-                    openYandexLink = appViewModel.settings::openYandexLink,
-                    onReverseLayoutChange = appViewModel.settings::setReverseLayout,
-                    onSyncProviderChange = appViewModel.settings::setSyncProvider,
-                    onOauthTokenChange = appViewModel.settings::setYandexOauthToken,
+                    openYandexLink = mainViewModel::openYandexLink,
+                    onReverseLayoutChange = mainViewModel::setReverseLayout,
+                    onSyncProviderChange = mainViewModel::setSyncProvider,
+                    onOauthTokenChange = mainViewModel::setYandexOauthToken,
                 )
             }
         }
