@@ -1,12 +1,12 @@
 package com.mangustc.mdnotes.domain.usecases.sync
 
-import com.mangustc.mdnotes.data.sync.SyncRepositoryFactory
 import com.mangustc.mdnotes.domain.exceptions.SyncStateException
 import com.mangustc.mdnotes.domain.models.Project
 import com.mangustc.mdnotes.domain.models.RelativePath
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.repositories.SyncRepository
+import com.mangustc.mdnotes.domain.repositories.SyncRepositoryFactory
 import com.mangustc.mdnotes.domain.usecases.UseCase
 import dev.whyoleg.cryptography.CryptographyProvider
 import dev.whyoleg.cryptography.DelicateCryptographyApi

@@ -2,13 +2,14 @@ package com.mangustc.mdnotes.data.sync
 
 import com.mangustc.mdnotes.domain.models.Settings
 import com.mangustc.mdnotes.domain.repositories.SyncRepository
+import com.mangustc.mdnotes.domain.repositories.SyncRepositoryFactory
 import com.mangustc.mdnotes.domain.usecases.sync.ValidSyncProvider
 import io.ktor.client.HttpClient
 
-class SyncRepositoryFactory(
+class CommonSyncRepositoryFactory(
     private val client: HttpClient,
-) {
-    fun create(settings: Settings): SyncRepository? {
+) : SyncRepositoryFactory {
+    override fun create(settings: Settings): SyncRepository? {
         return when (settings.syncProvider) {
             ValidSyncProvider.YANDEX -> YandexSyncRepository(
                 oauthToken = settings.yandexOauthToken,

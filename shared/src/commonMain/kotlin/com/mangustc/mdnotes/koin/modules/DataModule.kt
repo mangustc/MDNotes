@@ -7,10 +7,11 @@ import com.mangustc.mdnotes.data.database.ProjectDao
 import com.mangustc.mdnotes.data.linkPreview.CommonLinkPreviewRepository
 import com.mangustc.mdnotes.data.project.CommonProjectRepository
 import com.mangustc.mdnotes.data.project.CommonSettingsRepository
-import com.mangustc.mdnotes.data.sync.SyncRepositoryFactory
+import com.mangustc.mdnotes.data.sync.CommonSyncRepositoryFactory
 import com.mangustc.mdnotes.domain.repositories.LinkPreviewRepository
 import com.mangustc.mdnotes.domain.repositories.ProjectRepository
 import com.mangustc.mdnotes.domain.repositories.SettingsRepository
+import com.mangustc.mdnotes.domain.repositories.SyncRepositoryFactory
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -53,5 +54,5 @@ val dataModule: Module
         single<CommonProjectRepository>() bind ProjectRepository::class
         single<CommonSettingsRepository>() bind SettingsRepository::class
         single<CommonLinkPreviewRepository>() bind LinkPreviewRepository::class
-        single<SyncRepositoryFactory>()
+        single<CommonSyncRepositoryFactory>() bind SyncRepositoryFactory::class
     }
