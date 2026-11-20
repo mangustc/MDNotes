@@ -81,7 +81,6 @@ data class NoteWithTags(
 )
 @Entity(tableName = "notesFts")
 data class NoteEntityFts(
-    val id: Long,
     val name: String,
     val body: String,
 )

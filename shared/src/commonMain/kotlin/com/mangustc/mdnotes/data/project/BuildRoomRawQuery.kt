@@ -14,11 +14,10 @@ private fun escapeLike(value: String): String =
 fun SearchQuery.buildRoomRawQuery(project: Project): RoomRawQuery {
     val args = mutableListOf<Any>()
     val sb = StringBuilder()
-    val hasFts = bodyTerms.isNotEmpty()
     val ftsMatchExpr = buildFtsMatchQuery()
 
     sb.append("SELECT notes.* FROM notes")
-    if (hasFts && ftsMatchExpr != null) {
+    if (ftsMatchExpr != null) {
         sb.append("\nJOIN notesFts ON notes.rowid = notesFts.rowid")
         sb.append("\n  AND notesFts MATCH ?")
         args.add(ftsMatchExpr)
@@ -28,8 +27,10 @@ fun SearchQuery.buildRoomRawQuery(project: Project): RoomRawQuery {
     conditions.add("notes.projectId = (SELECT id FROM projects WHERE rootPath = ? LIMIT 1)")
     args.add(project.rootDomainFile.path)
     for (term in negatedBodyTerms) {
-        conditions.add("notes.body NOT LIKE ? ESCAPE '\\'")
-        args.add("%${escapeLike(term)}%")
+        conditions.add("(notes.name NOT LIKE ? ESCAPE '\\' AND notes.body NOT LIKE ? ESCAPE '\\')")
+        val pattern = "%${escapeLike(term)}%"
+        args.add(pattern)
+        args.add(pattern)
     }
     for (tag in positiveTagLikes()) {
         conditions.add(

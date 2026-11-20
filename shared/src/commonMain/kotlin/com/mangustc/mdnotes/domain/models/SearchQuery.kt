@@ -2,6 +2,7 @@ package com.mangustc.mdnotes.domain.models
 
 data class SearchQuery(
     val bodyTerms: List<String> = emptyList(),
+    val exactBodyTerms: List<String> = emptyList(),
     val negatedBodyTerms: List<String> = emptyList(),
     val tagFilters: List<String> = emptyList(),
     val negatedTagFilters: List<String> = emptyList(),
@@ -15,16 +16,33 @@ data class SearchQuery(
 
     val isEmpty: Boolean
         get() =
-            bodyTerms.isEmpty() && negatedBodyTerms.isEmpty() &&
+            bodyTerms.isEmpty() && exactBodyTerms.isEmpty() && negatedBodyTerms.isEmpty() &&
                     tagFilters.isEmpty() && negatedTagFilters.isEmpty() &&
                     propFilters.isEmpty() && nameFilter == null && negatedNameFilter == null
 
     fun buildFtsMatchQuery(): String? {
-        if (bodyTerms.isEmpty()) return null
-        return bodyTerms.joinToString(" AND ") { term ->
-            val sanitized = sanitizeFtsTerm(term)
-            if (sanitized.contains(" ")) "\"$sanitized\"*" else "$sanitized*"
+        if (bodyTerms.isEmpty() && exactBodyTerms.isEmpty()) return null
+
+        val parts = buildList {
+            for (phrase in exactBodyTerms) {
+                val sanitized = sanitizeFtsTerm(phrase)
+                if (sanitized.isNotEmpty()) {
+                    add("\"$sanitized\"")
+                }
+            }
+            for (term in bodyTerms) {
+                val sanitized = sanitizeFtsTerm(term)
+                if (sanitized.isNotEmpty()) {
+                    if (sanitized.contains(' ')) {
+                        add("\"$sanitized\"")
+                    } else {
+                        add("$sanitized*")
+                    }
+                }
+            }
         }
+
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(" ")
     }
 
     fun positiveTagLikes(): List<String> = tagFilters
@@ -36,6 +54,10 @@ data class SearchQuery(
         private val PROP_REGEX = Regex("""\[(\w+):([^]]+)]""")
         private val NEG_NAME_REGEX = Regex("""-name:(?:"([^"]*)"|(\S+))""")
         private val NAME_REGEX = Regex("""(?<!-)name:(?:"([^"]*)"|(\S+))""")
+        private val NEG_BODY_QUOTE_REGEX = Regex("""-"([^"]*)"""")
+        private val POS_BODY_QUOTE_REGEX = Regex("""(?<!-)"([^"]*)"""")
+        private val FTS_SPECIAL_CHARS_REGEX = Regex("""["'*\-^:()+]""")
+        private val WHITESPACE_REGEX = Regex("""\s+""")
 
         fun parse(raw: String): SearchQuery {
             var remainder = raw
@@ -68,25 +90,27 @@ data class SearchQuery(
             }?.takeIf { it.isNotBlank() }
             remainder = NAME_REGEX.replace(remainder, "")
 
-            val negatedBodyQuotes = Regex("""-"([^"]*)"""").findAll(remainder)
+            val negatedBodyQuotes = NEG_BODY_QUOTE_REGEX.findAll(remainder)
                 .map { it.groupValues[1] }
                 .filter { it.isNotBlank() }
                 .toList()
-            remainder = Regex("""-"([^"]*)"""").replace(remainder, "")
+            remainder = NEG_BODY_QUOTE_REGEX.replace(remainder, "")
 
-            val positiveBodyQuotes = Regex("""(?<!-)"([^"]*)"""").findAll(remainder)
+            val positiveBodyQuotes = POS_BODY_QUOTE_REGEX.findAll(remainder)
                 .map { it.groupValues[1] }
                 .filter { it.isNotBlank() }
                 .toList()
-            remainder = Regex("""(?<!-)"([^"]*)"""").replace(remainder, "")
+            remainder = POS_BODY_QUOTE_REGEX.replace(remainder, "")
 
-            val allTokens = remainder.trim().split(Regex("""\s+""")).filter { it.isNotBlank() }
-            val bodyTerms = positiveBodyQuotes + allTokens.filter { !it.startsWith("-") }
+            val allTokens = remainder.trim().split(WHITESPACE_REGEX).filter { it.isNotBlank() }
+            val bodyTerms = allTokens.filter { !it.startsWith("-") }
             val negatedBodyTerms = negatedBodyQuotes + allTokens.filter { it.startsWith("-") }
                 .map { it.removePrefix("-") }
+                .filter { it.isNotBlank() }
 
             return SearchQuery(
                 bodyTerms = bodyTerms,
+                exactBodyTerms = positiveBodyQuotes,
                 negatedBodyTerms = negatedBodyTerms,
                 tagFilters = tags,
                 negatedTagFilters = negatedTags,
@@ -97,6 +121,9 @@ data class SearchQuery(
         }
 
         fun sanitizeFtsTerm(term: String): String =
-            term.replace(Regex("""["'*\-^]"""), "")
+            term.replace(FTS_SPECIAL_CHARS_REGEX, " ")
+                .trim()
+                .replace(WHITESPACE_REGEX, " ")
+                .lowercase()
     }
 }

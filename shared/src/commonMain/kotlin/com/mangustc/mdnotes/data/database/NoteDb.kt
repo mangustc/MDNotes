@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         NoteEntityFts::class,
         LinkPreviewEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class NoteDb : RoomDatabase() {
